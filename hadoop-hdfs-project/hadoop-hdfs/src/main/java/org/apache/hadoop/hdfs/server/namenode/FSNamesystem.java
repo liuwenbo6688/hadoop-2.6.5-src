@@ -718,6 +718,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   /**
    * Instantiates an FSNamesystem loaded from the image and edits
    * directories specified in the passed Configuration.
+   * 注释说的很明确了，从磁盘加载image and edits文件初始化FSNamesystem
    *
    * @param conf the Configuration which specifies the storage directories
    *             from which to load
@@ -727,9 +728,20 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   static FSNamesystem loadFromDisk(Configuration conf) throws IOException {
 
     checkConfiguration(conf);
+
+    /**
+     * 构造 FSImage对象
+     *
+     */
     FSImage fsImage = new FSImage(conf,
+            // imageDirs  根据配置 dfs.namenode.name.dir
         FSNamesystem.getNamespaceDirs(conf),
-        FSNamesystem.getNamespaceEditsDirs(conf));
+            // editsDirs  根据配置 dfs.namenode.edits.dir
+            //默认配置下，edits文件和fsimage文件是放在一起的，之前演示过，都在一个目录下，都在一个目录文件下
+        FSNamesystem.getNamespaceEditsDirs(conf)
+    );
+
+    // 实例化 FSNamesystem 对象，将fsImage对象放到FSNamesystem里面
     FSNamesystem namesystem = new FSNamesystem(conf, fsImage, false);
     StartupOption startOpt = NameNode.getStartupOption(conf);
     if (startOpt == StartupOption.RECOVER) {
@@ -738,6 +750,11 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
     long loadStart = now();
     try {
+      /**
+       * 通过 FSNamesystem.loadFSImage()方法，从磁盘上去加载 fsimage和edits两个文件的数据
+       * 然后在内存中合并两个文件的数据
+       * 通过FSImage会持有一份在内存中完整的元数据信息
+       */
       namesystem.loadFSImage(startOpt);
     } catch (IOException ioe) {
       LOG.warn("Encountered exception loading fsimage", ioe);
@@ -1004,8 +1021,17 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     return Collections.unmodifiableList(auditLoggers);
   }
 
+
   private void loadFSImage(StartupOption startOpt) throws IOException {
     final FSImage fsImage = getFSImage();
+
+    /**
+     *
+     * 在namenode刚启动的时候，其实是从磁盘上读取 fsimage和edits两个文件
+     * 在内存中合并为一份完整的数据
+     * 接着讲内存中的元数据写一份到磁盘上去替换原来旧的fsimage文件
+     * 写完了一份新的fsimage文件之后，重新打开一个新的、空的edits文件类写入就可以了
+     */
 
     // format before starting up if requested
     if (startOpt == StartupOption.FORMAT) {
@@ -1387,6 +1413,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   }
   
   public static Collection<URI> getNamespaceDirs(Configuration conf) {
+    // "dfs.namenode.name.dir"
     return getStorageDirs(conf, DFS_NAMENODE_NAME_DIR_KEY);
   }
 
@@ -1477,6 +1504,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       }
     }    
     // Now add the non-shared dirs.
+    // "dfs.namenode.edits.dir"
     for (URI dir : getStorageDirs(conf, DFS_NAMENODE_EDITS_DIR_KEY)) {
       if (!editsDirs.add(dir)) {
         LOG.warn("Edits URI " + dir + " listed multiple times in " + 

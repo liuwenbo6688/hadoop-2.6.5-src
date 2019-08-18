@@ -94,9 +94,12 @@ import static org.apache.hadoop.util.ToolRunner.confirmPrompt;
  * running in any DFS deployment.  (Well, except when there
  * is a second backup/failover NameNode, or when using federated NameNodes.)
  *
- * The NameNode controls two critical tables:
+ * The NameNode controls two critical tables: 2种映射
  *   1)  filename->blocksequence (namespace)
+ *   namespace: 文件 -> block
  *   2)  block->machinelist ("inodes")
+ *   inodes： block -> datanode
+ *
  *
  * The first table is stored on disk and is very precious.
  * The second table is rebuilt every time the NameNode comes up.
@@ -536,6 +539,11 @@ public class NameNode implements NameNodeStatusMXBean {
   }
 
   protected void loadNamesystem(Configuration conf) throws IOException {
+    // 创建和初始化 FSNamesystem
+    // namenode启动的时候，会将磁盘上的fsimage和edits两个文件都读取到内存中进行合并
+    // 合并之后就是一份最新的元数据
+    // loadFromDisk()方法就是从磁盘上读取fsimage文件和edits文件
+    // 合并出来的元数据，就会作为FSNamesystem放在内存里
     this.namesystem = FSNamesystem.loadFromDisk(conf);
   }
 
@@ -589,12 +597,22 @@ public class NameNode implements NameNodeStatusMXBean {
     NameNode.initMetrics(conf, this.getRole());
     StartupProgressMetrics.register(startupProgress);
 
+
+    /**
+     * 1.第一个重要步骤：启动 HttpServer  默认50070端口
+     */
     if (NamenodeRole.NAMENODE == role) {
+      // 如果角色是NameNode ，启动 HttpServer
+      // 启动 NameNodeHttpServer，接收Http请求
       startHttpServer(conf);
     }
 
     this.spanReceiverHost = SpanReceiverHost.getInstance(conf);
 
+    /**
+     * 2. 重要组件 FSNamesystem
+     *
+     */
     loadNamesystem(conf);
 
     rpcServer = createRpcServer(conf);
@@ -702,6 +720,7 @@ public class NameNode implements NameNodeStatusMXBean {
   }
   
   private void startHttpServer(final Configuration conf) throws IOException {
+    // 默认http端口号就是 50070，这个端口号应该非常熟悉
     httpServer = new NameNodeHttpServer(conf, this, getHttpServerBindAddress(conf));
     httpServer.start();
     httpServer.setStartupProgress(startupProgress);
@@ -750,9 +769,11 @@ public class NameNode implements NameNodeStatusMXBean {
   }
 
   protected NameNode(Configuration conf, NamenodeRole role) 
-      throws IOException { 
+      throws IOException {
+
     this.conf = conf;
     this.role = role;
+
     setClientNamenodeAddress(conf);
     String nsId = getNameServiceId(conf);
     String namenodeId = HAUtil.getNameNodeId(conf, nsId);
@@ -762,6 +783,9 @@ public class NameNode implements NameNodeStatusMXBean {
     this.haContext = createHAContext();
     try {
       initializeGenericKeys(conf, nsId, namenodeId);
+
+      // 初始化的核心代码
+      // 初始化 namenode 实例化对象
       initialize(conf);
       try {
         haContext.writeLock();
@@ -1382,8 +1406,15 @@ public class NameNode implements NameNodeStatusMXBean {
     }
     setStartupOption(conf, startOpt);
 
+    /**
+     * 之前从传入的参数里解析出来一个startOpt参数
+     * 之前执行指令的时候，hdfs namemode -format
+     * 这个 -format 就会作为参数传递进来
+     * 在这里就是startOpt ，就是告诉人家你要执行什么操作
+     */
     switch (startOpt) {
       case FORMAT: {
+        //如果传递进来的是-format，就是在做 hdfs namenode 目录结构的格式化
         boolean aborted = format(conf, startOpt.getForceFormat(),
             startOpt.getInteractiveFormat());
         terminate(aborted ? 1 : 0);
@@ -1441,6 +1472,8 @@ public class NameNode implements NameNodeStatusMXBean {
         terminate(0);
         return null;
       }
+      // 要看的核心源码在这里,正常情况下来启动namenode
+        // new NameNode()  创建一个NameNode的实例
       default: {
         DefaultMetricsSystem.initialize("NameNode");
         return new NameNode(conf);
@@ -1501,6 +1534,8 @@ public class NameNode implements NameNodeStatusMXBean {
   }
   
   /**
+   *  Namenode 启动的入口
+   *
    */
   public static void main(String argv[]) throws Exception {
     if (DFSUtil.parseHelpArgument(argv, NameNode.USAGE, System.out, true)) {
@@ -1509,6 +1544,8 @@ public class NameNode implements NameNodeStatusMXBean {
 
     try {
       StringUtils.startupShutdownMessage(NameNode.class, argv, LOG);
+
+      //核心源码出现，createNameNode方法创建了一个NameNode实例
       NameNode namenode = createNameNode(argv, null);
       if (namenode != null) {
         namenode.join();

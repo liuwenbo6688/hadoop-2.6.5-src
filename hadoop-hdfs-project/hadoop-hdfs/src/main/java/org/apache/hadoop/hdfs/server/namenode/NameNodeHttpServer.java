@@ -118,6 +118,8 @@ public class NameNodeHttpServer {
       }
     }
 
+    // HttpServer2 是 hadoop 自己实现的http的服务器
+    // 设计模式-构造者模式
     HttpServer2.Builder builder = DFSUtil.httpServerTemplateForNNAndJN(conf,
         httpAddr, httpsAddr, "hdfs",
         DFSConfigKeys.DFS_NAMENODE_KERBEROS_INTERNAL_SPNEGO_PRINCIPAL_KEY,
@@ -138,7 +140,14 @@ public class NameNodeHttpServer {
 
     httpServer.setAttribute(NAMENODE_ATTRIBUTE_KEY, nn);
     httpServer.setAttribute(JspHelper.CURRENT_CONF, conf);
+
+    /**
+     * 绑定一堆 servlet
+     * 这些servlet相当于定义自己接收哪些http请求，接收到请求后由谁来处理
+     */
     setupServlets(httpServer, conf);
+
+    // 启动 httpServer
     httpServer.start();
 
     int connIdx = 0;
@@ -237,8 +246,15 @@ public class NameNodeHttpServer {
   }
 
   private static void setupServlets(HttpServer2 httpServer, Configuration conf) {
+
+    /**
+     * 举个例子
+     * http://localhost:50070/startupProgress  的请求就会交给StartupProgressServlet 处理
+     */
     httpServer.addInternalServlet("startupProgress",
         StartupProgressServlet.PATH_SPEC, StartupProgressServlet.class);
+
+
     httpServer.addInternalServlet("getDelegationToken",
         GetDelegationTokenServlet.PATH_SPEC, 
         GetDelegationTokenServlet.class, true);
@@ -252,8 +268,11 @@ public class NameNodeHttpServer {
         true);
     httpServer.addInternalServlet("imagetransfer", ImageServlet.PATH_SPEC,
         ImageServlet.class, true);
+
+    //  '/listPaths/*'  这种请求交给 ListPathsServlet 处理
     httpServer.addInternalServlet("listPaths", "/listPaths/*",
         ListPathsServlet.class, false);
+
     httpServer.addInternalServlet("data", "/data/*",
         FileDataServlet.class, false);
     httpServer.addInternalServlet("checksum", "/fileChecksum/*",
