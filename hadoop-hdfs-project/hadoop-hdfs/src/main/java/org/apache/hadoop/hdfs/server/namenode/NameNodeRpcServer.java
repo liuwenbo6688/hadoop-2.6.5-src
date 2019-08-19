@@ -194,10 +194,12 @@ class NameNodeRpcServer implements NamenodeProtocols {
   private final boolean serviceAuthEnabled;
 
   /** The RPC server that listens to requests from DataNodes */
+  // 监听DataNodes请求的 RPC server
   private final RPC.Server serviceRpcServer;
   private final InetSocketAddress serviceRPCAddress;
   
   /** The RPC server that listens to requests from clients */
+  // 监听 clients 请求的 RPC server
   protected final RPC.Server clientRpcServer;
   protected final InetSocketAddress clientRpcAddress;
   
@@ -208,7 +210,8 @@ class NameNodeRpcServer implements NamenodeProtocols {
     this.nn = nn;
     this.namesystem = nn.getNamesystem();
     this.metrics = NameNode.getNameNodeMetrics();
-    
+
+    // dfs.namenode.handler.count
     int handlerCount = 
       conf.getInt(DFS_NAMENODE_HANDLER_COUNT_KEY, 
                   DFS_NAMENODE_HANDLER_COUNT_DEFAULT);
@@ -216,17 +219,24 @@ class NameNodeRpcServer implements NamenodeProtocols {
     RPC.setProtocolEngine(conf, ClientNamenodeProtocolPB.class,
         ProtobufRpcEngine.class);
 
+      /**
+       * Client 和 Namenode之间通信，需要调用的接口
+       * client好比是命令行 (hadoop fs *****)
+       */
     ClientNamenodeProtocolServerSideTranslatorPB 
-       clientProtocolServerTranslator = 
-         new ClientNamenodeProtocolServerSideTranslatorPB(this);
-     BlockingService clientNNPbService = ClientNamenodeProtocol.
-         newReflectiveBlockingService(clientProtocolServerTranslator);
-    
+       clientProtocolServerTranslator = new ClientNamenodeProtocolServerSideTranslatorPB(this);
+     BlockingService clientNNPbService = ClientNamenodeProtocol.newReflectiveBlockingService(clientProtocolServerTranslator);
+
+      /**
+       * Datanode 和 Namenode之间通信的接口
+       */
     DatanodeProtocolServerSideTranslatorPB dnProtoPbTranslator = 
         new DatanodeProtocolServerSideTranslatorPB(this);
-    BlockingService dnProtoPbService = DatanodeProtocolService
-        .newReflectiveBlockingService(dnProtoPbTranslator);
+    BlockingService dnProtoPbService = DatanodeProtocolService.newReflectiveBlockingService(dnProtoPbTranslator);
 
+      /**
+       * 可能是不同的Namenode之间通信的接口
+       */
     NamenodeProtocolServerSideTranslatorPB namenodeProtocolXlator = 
         new NamenodeProtocolServerSideTranslatorPB(this);
     BlockingService NNPbService = NamenodeProtocolService
@@ -256,7 +266,11 @@ class NameNodeRpcServer implements NamenodeProtocols {
         new GetUserMappingsProtocolServerSideTranslatorPB(this);
     BlockingService getUserMappingService = GetUserMappingsProtocolService
         .newReflectiveBlockingService(getUserMappingXlator);
-    
+
+
+      /**
+       * 主备namenode双节点HA切换需要被调用的接口
+       */
     HAServiceProtocolServerSideTranslatorPB haServiceProtocolXlator = 
         new HAServiceProtocolServerSideTranslatorPB(this);
     BlockingService haPbService = HAServiceProtocolService
@@ -269,6 +283,9 @@ class NameNodeRpcServer implements NamenodeProtocols {
     
     WritableRpcEngine.ensureInitialized();
 
+      /**
+       * serviceRpcAddr 一看就是从配置文件里解析出来的， serviceRpcServer 需要监听的端口号
+       */
     InetSocketAddress serviceRpcAddr = nn.getServiceRpcServerAddress(conf);
     if (serviceRpcAddr != null) {
       String bindHost = nn.getServiceRpcServerBindHost(conf);
@@ -278,6 +295,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
       LOG.info("Service RPC server is binding to " + bindHost + ":" +
           serviceRpcAddr.getPort());
 
+      // dfs.namenode.service.handler.count
       int serviceHandlerCount =
         conf.getInt(DFS_NAMENODE_SERVICE_HANDLER_COUNT_KEY,
                     DFS_NAMENODE_SERVICE_HANDLER_COUNT_DEFAULT);
@@ -321,7 +339,12 @@ class NameNodeRpcServer implements NamenodeProtocols {
       serviceRpcServer = null;
       serviceRPCAddress = null;
     }
-    InetSocketAddress rpcAddr = nn.getRpcServerAddress(conf);
+
+
+      /**
+       * clientRpcServer 的初始化
+       */
+      InetSocketAddress rpcAddr = nn.getRpcServerAddress(conf);
     String bindHost = nn.getRpcServerBindHost(conf);
     if (bindHost == null) {
       bindHost = rpcAddr.getHostName();

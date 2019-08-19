@@ -85,7 +85,9 @@ public class NameNodeResourceChecker {
         LOG.debug("Space available on volume '" + volume + "' is "
             + availableSpace);
       }
-      if (availableSpace < duReserved) {
+      //  duReserved就是配置的最小空间
+      //  配置：dfs.namenode.resource.du.reserved  默认100M
+      if (availableSpace < duReserved  ) {
         LOG.warn("Space available on volume '" + volume + "' is "
             + availableSpace +
             ", which is below the configured reserved amount " + duReserved);
@@ -110,6 +112,7 @@ public class NameNodeResourceChecker {
     this.conf = conf;
     volumes = new HashMap<String, CheckedVolume>();
 
+    // dfs.namenode.resource.du.reserved  默认100M
     duReserved = conf.getLong(DFSConfigKeys.DFS_NAMENODE_DU_RESERVED_KEY,
         DFSConfigKeys.DFS_NAMENODE_DU_RESERVED_DEFAULT);
     

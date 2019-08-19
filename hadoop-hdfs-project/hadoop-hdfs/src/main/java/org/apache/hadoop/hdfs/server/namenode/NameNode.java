@@ -615,6 +615,12 @@ public class NameNode implements NameNodeStatusMXBean {
      */
     loadNamesystem(conf);
 
+
+    /**
+     * 3. 初始化 RPC Server
+     * 承接datanode请求的server
+     * 承接client端请求的server
+     */
     rpcServer = createRpcServer(conf);
     if (clientNamenodeAddress == null) {
       // This is expected for MiniDFSCluster. Set it now using 
@@ -632,7 +638,10 @@ public class NameNode implements NameNodeStatusMXBean {
     pauseMonitor = new JvmPauseMonitor(conf);
     pauseMonitor.start();
     metrics.getJvmMetrics().setPauseMonitor(pauseMonitor);
-    
+
+    /**
+     * 4.
+     */
     startCommonServices(conf);
   }
   
@@ -647,14 +656,26 @@ public class NameNode implements NameNodeStatusMXBean {
 
   /** Start the services common to active and standby states */
   private void startCommonServices(Configuration conf) throws IOException {
+
+    /**
+     * 磁盘空间检查
+     * safemode
+     * 启动BlockManager的一堆后台线程
+     */
     namesystem.startCommonServices(conf, haContext);
+
     registerNNSMXBean();
     if (NamenodeRole.NAMENODE != role) {
       startHttpServer(conf);
       httpServer.setNameNodeAddress(getNameNodeAddress());
       httpServer.setFSImage(getFSImage());
     }
+
+    /**
+     *
+     */
     rpcServer.start();
+
     plugins = conf.getInstances(DFS_NAMENODE_PLUGINS_KEY,
         ServicePlugin.class);
     for (ServicePlugin p: plugins) {
@@ -823,6 +844,11 @@ public class NameNode implements NameNodeStatusMXBean {
    */
   public void join() {
     try {
+      /**
+       * 只要rpcServer还在运行，name就会进入无限制的阻塞和等待，保证namenode不会消失
+       * 如果namenode进程消失了，肯定说明这里的join方法退出了，比如说rpc server不再运行
+       * 或者说namenode进程内部的一些错误，oom内存溢出
+       */
       rpcServer.join();
     } catch (InterruptedException ie) {
       LOG.info("Caught interrupted exception ", ie);
@@ -1545,8 +1571,9 @@ public class NameNode implements NameNodeStatusMXBean {
     try {
       StringUtils.startupShutdownMessage(NameNode.class, argv, LOG);
 
-      //核心源码出现，createNameNode方法创建了一个NameNode实例
+      // 核心源码出现，createNameNode方法创建了一个NameNode实例
       NameNode namenode = createNameNode(argv, null);
+      // 保证 namenode 一直运行不退出
       if (namenode != null) {
         namenode.join();
       }

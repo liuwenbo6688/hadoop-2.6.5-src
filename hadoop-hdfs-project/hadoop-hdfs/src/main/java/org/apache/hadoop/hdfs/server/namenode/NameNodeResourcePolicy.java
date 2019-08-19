@@ -31,7 +31,11 @@ final class NameNodeResourcePolicy {
   /**
    * Return true if and only if there are sufficient NN
    * resources to continue logging edits.
-   * 
+   *
+   * 这里检查磁盘空间的目的是什么？
+   * edits目录的剩余磁盘空间是否充足，如果你的hdfs namenode要正常运行
+   * 首要的一个条件，就是edits log必须可以正常的有足够磁盘空间让namenode写入日志
+   *
    * @param resources the collection of resources to check.
    * @param minimumRedundantResources the minimum number of redundant resources
    *        required to continue operation.

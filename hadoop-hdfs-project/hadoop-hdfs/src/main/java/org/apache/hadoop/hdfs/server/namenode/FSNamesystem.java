@@ -1129,13 +1129,20 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     this.haContext = haContext;
     try {
       nnResourceChecker = new NameNodeResourceChecker(conf);
+      // 检查 edits log 磁盘空间是否足够，大于100M
       checkAvailableResources();
+
+      // 安全模式
       assert safeMode != null && !isPopulatingReplQueues();
       StartupProgress prog = NameNode.getStartupProgress();
       prog.beginPhase(Phase.SAFEMODE);
       prog.setTotal(Phase.SAFEMODE, STEP_AWAITING_REPORTED_BLOCKS,
         getCompleteBlocksTotal());
       setBlockTotal();
+
+      /**
+       * 启动 BlockManager 里面的一堆后台线程
+       */
       blockManager.activate(conf);
     } finally {
       writeUnlock();
@@ -5143,6 +5150,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   void checkAvailableResources() {
     Preconditions.checkState(nnResourceChecker != null,
         "nnResourceChecker not initialized");
+    // 使用 NameNodeResourceChecker 检查是否有充足的可用磁盘空间
     hasResourcesAvailable = nnResourceChecker.hasAvailableDiskSpace();
   }
 
@@ -5691,6 +5699,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
      */
     private volatile int extension;
     /** Min replication required by safe mode. */
+    // dfs.namenode.replication.min
     private final int safeReplication;
     /** threshold for populating needed replication queues */
     private final double replQueueThreshold;
@@ -5698,7 +5707,8 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     /** Time when threshold was reached.
      * <br> -1 safe mode is off
      * <br> 0 safe mode is on, and threshold is not reached yet
-     * <br> >0 safe mode is on, but we are in extension period 
+     * <br> >0 safe mode is on, but we are in extension period
+     * 0 安全模式
      */
     private long reached = -1;  
     /** Total number of blocks. */
@@ -5800,6 +5810,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
      * Enter safe mode.
      */
     private void enter() {
+      // 进入安全模式其实就是 reached置位 0
       this.reached = 0;
     }
       
@@ -5880,8 +5891,12 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
      * if DFS is empty or {@link #threshold} == 0
      */
     private boolean needEnter() {
+
+
       return (threshold != 0 && blockSafe < blockThreshold) ||
+              //当前存活的datanode数小于阈值
         (datanodeThreshold != 0 && getNumLiveDataNodes() < datanodeThreshold) ||
+              //eidt log 磁盘资源不充足
         (!nameNodeHasResourcesAvailable());
     }
       
@@ -5895,8 +5910,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       if (inTransitionToActive()) {
         return;
       }
-      // if smmthread is already running, the block threshold must have been 
-      // reached before, there is no need to enter the safe mode again
+
+
+      // needEnter() 方法就是检查是否要进入安全模式
       if (smmthread == null && needEnter()) {
         enter();
         // check if we are ready to initialize replication queues
@@ -5907,9 +5923,12 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         reportStatus("STATE* Safe mode ON.", false);
         return;
       }
+
+      // 能执行到这，说明可以退出安全模式了
       // the threshold is reached or was reached before
       if (!isOn() ||                           // safe mode is off
           extension <= 0 || threshold <= 0) {  // don't need to wait
+        //离开安全模式
         this.leave(); // leave safe mode
         return;
       }
@@ -5936,7 +5955,10 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
      */
     private synchronized void setBlockTotal(int total) {
       this.blockTotal = total;
+      // threshold : dfs.namenode.safemode.threshold-pct = 99.9%
+      //
       this.blockThreshold = (int) (blockTotal * threshold);
+
       this.blockReplQueueThreshold = 
         (int) (blockTotal * replQueueThreshold);
       if (haEnabled) {
@@ -5947,13 +5969,23 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       }
       if(blockSafe < 0)
         this.blockSafe = 0;
+
+      // 检查和触发是否进入safemode
       checkMode();
     }
       
     /**
+     * datanode 一旦启动之后，一定会给 namenode 汇报自己的block情况
+     * namenode 接收到block的情况之后，一定会调用 incrementSafeBlockCount()方法
+     * 传进来当前这个block的副本数量
+     * 如果block的副本数量正好等于safeReplication的数量（默认是1），更新blockSafe
+     *
+     * 每次这个方法执行之后，都会执行checkMode，检查是否可以退出safemode
+     *
+     *
      * Increment number of safe blocks if current block has 
      * reached minimal replication.
-     * @param replication current replication 
+     * @param replication current replication
      */
     private synchronized void incrementSafeBlockCount(short replication) {
       if (replication == safeReplication) {
@@ -5969,6 +6001,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
           this.awaitingReportedBlocksCounter.increment();
         }
 
+        // 每次这个方法执行之后，都会执行checkMode，检查是否可以退出safemode
         checkMode();
       }
     }
@@ -6292,6 +6325,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     SafeModeInfo safeMode = this.safeMode;
     if (safeMode == null)
       return;
+    /**
+     * 交给 SafeModeInfo 判断是否要进入安全模式
+     */
     safeMode.setBlockTotal((int)getCompleteBlocksTotal());
   }
 
@@ -6314,6 +6350,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     readLock();
     numUCBlocks = leaseManager.getNumUnderConstructionBlocks();
     try {
+      // 使用 block 的总数量 - 处于 under construction 状态的block的数量，就是所有的处于complete状态的block
       return getBlocksTotal() - numUCBlocks;
     } finally {
       readUnlock();
