@@ -124,6 +124,10 @@ class BlockPoolManager {
   
   synchronized void startAll() throws IOException {
     try {
+      /**
+       * 这块东西里面隐藏了极为关键的逻辑
+       * datanode启动的时候，要向namenode去注册，让namenode感知到自己
+       */
       UserGroupInformation.getLoginUser().doAs(
           new PrivilegedExceptionAction<Object>() {
             @Override
@@ -156,6 +160,7 @@ class BlockPoolManager {
             .getNNServiceRpcAddressesForCluster(conf);
 
     synchronized (refreshNamenodesLock) {
+      //***
       doRefreshNamenodes(newAddressMap);
     }
   }
@@ -196,10 +201,23 @@ class BlockPoolManager {
       if (!toAdd.isEmpty()) {
         LOG.info("Starting BPOfferServices for nameservices: " +
             Joiner.on(",").useForNull("<default>").join(toAdd));
-      
+
+        /**
+         *  BPOfferService 和 BPServiceActor
+         *  nameservice ，一组namenode，2个namenode组成，就是一个active和一个standby
+         *  一组namenode就是一个nameservice，回头看看当时部署hadoop的时候做的一些配置，当时就配置了nameservice
+         *  所以说在初始化 BlockPoolManager的时候，他其实就是根据配置文件中的nameservice的配置
+         *  对每个nameservice（一组namenode），去创建一个 BPOfferService
+         *
+         *  如果仅仅使用的是hadoop的普通 HA架构，就只有一个nameservice
+         *  也就是只有一个BPOfferService
+         *
+         *
+         */
         for (String nsToAdd : toAdd) {
           ArrayList<InetSocketAddress> addrs =
             Lists.newArrayList(addrMap.get(nsToAdd).values());
+          // 创建 BPOfferService
           BPOfferService bpos = createBPOS(addrs);
           bpByNameserviceId.put(nsToAdd, bpos);
           offerServices.add(bpos);

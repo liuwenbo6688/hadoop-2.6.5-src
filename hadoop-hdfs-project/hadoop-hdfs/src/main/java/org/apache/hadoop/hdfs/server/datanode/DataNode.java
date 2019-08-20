@@ -215,28 +215,52 @@ import com.google.protobuf.BlockingService;
  * regularly with a single NameNode.  It also communicates
  * with client code and other DataNodes from time to time.
  *
+ * DataNode 是专门负责存储block的，一个hdfs集群可以有一个或者多个DataNode
+ * 每个 DataNode 都会定时去跟 namenode进行通信，（ 定时发送心跳、汇报自己的block情况、通知namenode自己是否存活 ）
+ * DataNode也会和客户端client和其它DataNode进行通信
+ *
  * DataNodes store a series of named blocks.  The DataNode
  * allows client code to read these blocks, or to write new
  * block data.  The DataNode may also, in response to instructions
  * from its NameNode, delete blocks or copy blocks to/from other
  * DataNodes.
  *
+ *
+ *
  * The DataNode maintains just one critical table:
  *   block-> stream of bytes (of BLOCK_SIZE or less)
+ *
+ *
  *
  * This info is stored on a local disk.  The DataNode
  * reports the table's contents to the NameNode upon startup
  * and every so often afterwards.
+ *
+ * DataNode 仅仅会维护一份关键的数据，block -> stream of bytes 的映射
+ * 这份数据会存储在本地的磁盘文件里，datanode会在自己启动的时候给namenode汇报一次这份数据
+ * 同时后面在运行的过程中会不断的给namenode汇报
  *
  * DataNodes spend their lives in an endless loop of asking
  * the NameNode for something to do.  A NameNode cannot connect
  * to a DataNode directly; a NameNode simply returns values from
  * functions invoked by a DataNode.
  *
+ * namenode不能直接跟datanode进行连接的，意思是说namenode不会直接主动给datanode发送指令
+ * 每次datanode询问namenode自己是否有什么事儿可以干的时候，namenode才会给datanode在这次心跳里返回一个指令，让datanode去运行
+ *
  * DataNodes maintain an open server socket so that client code 
  * or other DataNodes can read/write data.  The host/port for
  * this server is reported to the NameNode, which then sends that
  * information to clients or other DataNodes that might be interested.
+ *
+ * datanode 维护一个开放的 server socket，监听一个端口，client或者其他datanodes可以直接跟这个端口进行通信，来读写datanode上存储的的block数据
+ * 这个监听的 host+port 会汇报给namenode
+ * namenode可以感知集群中所有的datanode的host和port
+ * 然后呢，比如说client和其他datanode要跟某个datanode进行通信，会找namenode要
+ *
+ *
+ *
+ *
  *
  **********************************************************/
 @InterfaceAudience.Private
@@ -415,6 +439,10 @@ public class DataNode extends ReconfigurableBase
     try {
       hostName = getHostName(conf);
       LOG.info("Configured hostname is " + hostName);
+
+      /**
+       * 初始化了datanode的所有关键性的组件
+       */
       startDataNode(conf, dataDirs, resources);
     } catch (IOException ie) {
       shutdown();
@@ -675,6 +703,10 @@ public class DataNode extends ReconfigurableBase
 
     this.infoServer = builder.build();
 
+    /**
+     * 添加一堆 url和 Servlet 的映射
+     * 哪些url转发给哪些Servlet 进行处理
+     */
     this.infoServer.addInternalServlet(null, "/streamFile/*", StreamFile.class);
     this.infoServer.addInternalServlet(null, "/getFileChecksum/*",
         FileChecksumServlets.GetServlet.class);
@@ -715,16 +747,23 @@ public class DataNode extends ReconfigurableBase
   
 
   private void initIpcServer(Configuration conf) throws IOException {
+
+    // dfs.datanode.ipc.address
     InetSocketAddress ipcAddr = NetUtils.createSocketAddr(
         conf.get(DFS_DATANODE_IPC_ADDRESS_KEY));
     
     // Add all the RPC protocols that the Datanode implements    
     RPC.setProtocolEngine(conf, ClientDatanodeProtocolPB.class,
         ProtobufRpcEngine.class);
+
+    //client 和 datanode之间进行管理的接口
     ClientDatanodeProtocolServerSideTranslatorPB clientDatanodeProtocolXlator = 
           new ClientDatanodeProtocolServerSideTranslatorPB(this);
     BlockingService service = ClientDatanodeProtocolService
         .newReflectiveBlockingService(clientDatanodeProtocolXlator);
+
+    // 设计模式-构造者模式
+    // 初始化RPC Server
     ipcServer = new RPC.Builder(conf)
         .setProtocol(ClientDatanodeProtocolPB.class)
         .setInstance(service)
@@ -734,7 +773,8 @@ public class DataNode extends ReconfigurableBase
             conf.getInt(DFS_DATANODE_HANDLER_COUNT_KEY,
                 DFS_DATANODE_HANDLER_COUNT_DEFAULT)).setVerbose(false)
         .setSecretManager(blockPoolTokenSecretManager).build();
-    
+
+    // datanode 和datanode之间的接口
     InterDatanodeProtocolServerSideTranslatorPB interDatanodeProtocolXlator = 
         new InterDatanodeProtocolServerSideTranslatorPB(this);
     service = InterDatanodeProtocolService
@@ -879,9 +919,16 @@ public class DataNode extends ReconfigurableBase
     streamingAddr = tcpPeerServer.getStreamingAddr();
     LOG.info("Opened streaming server at " + streamingAddr);
     this.threadGroup = new ThreadGroup("dataXceiverServer");
+    /**
+     *  DataXceiverServer 组件
+     *  datanode上面专门在后面负责为client和datanode接收读写请求的
+     *  Xceiver，数据流的意思
+     *  这个server以数据流的方式，为client读写block提供数据流的上传，数据流的下载
+     */
     xserver = new DataXceiverServer(tcpPeerServer, conf, this);
     this.dataXceiverServer = new Daemon(threadGroup, xserver);
     this.threadGroup.setDaemon(true); // auto destroy when empty
+
 
     if (conf.getBoolean(DFSConfigKeys.DFS_CLIENT_READ_SHORTCIRCUIT_KEY,
               DFSConfigKeys.DFS_CLIENT_READ_SHORTCIRCUIT_DEFAULT) ||
@@ -1081,12 +1128,24 @@ public class DataNode extends ReconfigurableBase
     LOG.info("Starting DataNode with maxLockedMemory = " +
         dnConf.maxLockedMemory);
 
+    /**
+     *
+     */
     storage = new DataStorage();
     
     // global DN settings
     registerMXBean();
+
+    /**
+     * 初始化一个 DataXceiverServer 组件，后续为client提供数据流方式的block读写
+     */
     initDataXceiver(conf);
+
+    /**
+     * 启动http server
+     */
     startInfoServer(conf);
+
     pauseMonitor = new JvmPauseMonitor(conf);
     pauseMonitor.start();
   
@@ -1097,12 +1156,21 @@ public class DataNode extends ReconfigurableBase
     dnUserName = UserGroupInformation.getCurrentUser().getShortUserName();
     LOG.info("dnUserName = " + dnUserName);
     LOG.info("supergroup = " + supergroup);
+
+    /**
+     * 初始化 RPC server
+     */
     initIpcServer(conf);
 
     metrics = DataNodeMetrics.create(conf, getDisplayName());
     metrics.getJvmMetrics().setPauseMonitor(pauseMonitor);
-    
+
+    /**
+     * 初始化非常重要的组件
+     *
+     */
     blockPoolManager = new BlockPoolManager(this);
+    //
     blockPoolManager.refreshNamenodes(conf);
 
     // Create the ReadaheadPool from the DataNode context so we can
@@ -2216,6 +2284,8 @@ public class DataNode extends ReconfigurableBase
     UserGroupInformation.setConfiguration(conf);
     SecurityUtil.login(conf, DFS_DATANODE_KEYTAB_FILE_KEY,
         DFS_DATANODE_KERBEROS_PRINCIPAL_KEY);
+
+    //
     return makeInstance(dataLocations, conf, resources);
   }
 
@@ -2263,8 +2333,15 @@ public class DataNode extends ReconfigurableBase
   @InterfaceAudience.Private
   public static DataNode createDataNode(String args[], Configuration conf,
       SecureResources resources) throws IOException {
+    // 1 实例化一个DataNode，同时实例化一个组件
     DataNode dn = instantiateDataNode(args, conf, resources);
     if (dn != null) {
+
+
+      /**
+       * 2 启动datanode的一些server， http server、rpc server、stream server
+       *   同时启动一些后台线程
+       */
       dn.runDatanodeDaemon();
     }
     return dn;
@@ -2329,6 +2406,8 @@ public class DataNode extends ReconfigurableBase
     DefaultMetricsSystem.initialize("DataNode");
 
     assert locations.size() > 0 : "number of data directories should be > 0";
+
+    // 直接创建实例化 DataNode
     return new DataNode(conf, locations, resources);
   }
 
@@ -2439,6 +2518,11 @@ public class DataNode extends ReconfigurableBase
     int errorCode = 0;
     try {
       StringUtils.startupShutdownMessage(DataNode.class, args, LOG);
+      /**
+       * 和namenode的代码结构很像
+       * 先创建一个DataNode实例
+       * 然后调用DataNode的join方法，进行阻塞，让datanode一直运行
+       */
       DataNode datanode = createDataNode(args, null, resources);
       if (datanode != null) {
         datanode.join();
@@ -2457,7 +2541,11 @@ public class DataNode extends ReconfigurableBase
       terminate(errorCode);
     }
   }
-  
+
+  /**
+   * datanode 启动入口
+   * @param args
+   */
   public static void main(String args[]) {
     if (DFSUtil.parseHelpArgument(args, DataNode.USAGE, System.out, true)) {
       System.exit(0);

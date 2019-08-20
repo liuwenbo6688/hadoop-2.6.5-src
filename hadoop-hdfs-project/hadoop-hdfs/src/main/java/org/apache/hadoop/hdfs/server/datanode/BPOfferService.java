@@ -122,6 +122,10 @@ class BPOfferService {
     this.dn = dn;
 
     for (InetSocketAddress addr : nnAddrs) {
+      // BPServiceActor 是用来干嘛的呢？
+      // 如果datanode要向namenode发送一些请求的话
+      // 比如说：注册、心跳、汇报block、以及一些其它的东西，都是在 BPServiceActor 里面发送出去的
+      // 一个BPServiceActor就是一个线程
       this.bpServices.add(new BPServiceActor(addr, this));
     }
   }
