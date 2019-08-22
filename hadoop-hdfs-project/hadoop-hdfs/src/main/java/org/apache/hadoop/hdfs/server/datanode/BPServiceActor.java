@@ -714,6 +714,8 @@ class BPServiceActor implements Runnable {
         + " Initial delay: " + dnConf.initialBlockReportDelay + "msec"
         + "; heartBeatInterval=" + dnConf.heartBeatInterval);
 
+
+    // **************** 心跳机制 **************************************
     //
     // Now loop for a long time....
     //
@@ -725,6 +727,7 @@ class BPServiceActor implements Runnable {
         // Every so often, send heartbeat or block-report
         //
         if (startTime - lastHeartbeat >= dnConf.heartBeatInterval) {
+          // 当前时间 - 上次心跳时间 > 配置的心跳间隔时间（默认3s）
           //
           // All heartbeat messages include following info:
           // -- Datanode name
@@ -734,7 +737,10 @@ class BPServiceActor implements Runnable {
           //
           lastHeartbeat = startTime;
           if (!dn.areHeartbeatsDisabledForTests()) {
+
+            //发送心跳
             HeartbeatResponse resp = sendHeartBeat();
+
             assert resp != null;
             dn.getMetrics().addHeartbeat(now() - startTime);
 
@@ -744,6 +750,9 @@ class BPServiceActor implements Runnable {
             // Important that this happens before processCommand below,
             // since the first heartbeat to a new active might have commands
             // that we should actually process.
+            /**
+             *
+             */
             bpos.updateActorStatesFromHeartbeat(
                 this, resp.getNameNodeHaState());
             state = resp.getNameNodeHaState().getState();
@@ -752,6 +761,9 @@ class BPServiceActor implements Runnable {
               handleRollingUpgradeStatus(resp);
             }
 
+            /**
+             * 执行namenode给下发的任务
+             */
             long startProcessCommands = now();
             if (!processCommand(resp.getCommands()))
               continue;
@@ -763,15 +775,27 @@ class BPServiceActor implements Runnable {
             }
           }
         }
+
+        //********* 下面的是在不断的向namenode汇报自己的block *************************************************************
+        /**
+         * 默认5分钟
+         */
         if (sendImmediateIBR ||
             (startTime - lastDeletedReport > dnConf.deleteReportInterval)) {
           reportReceivedDeletedBlocks();
           lastDeletedReport = startTime;
         }
 
+        /**
+         * 汇报block
+         * 默认 6小时
+         */
         List<DatanodeCommand> cmds = blockReport();
         processCommand(cmds == null ? null : cmds.toArray(new DatanodeCommand[cmds.size()]));
 
+        /**
+         * 默认 10s
+         */
         DatanodeCommand cmd = cacheReport();
         processCommand(new DatanodeCommand[]{ cmd });
 
@@ -860,6 +884,13 @@ class BPServiceActor implements Runnable {
     bpos.registrationSucceeded(this, bpRegistration);
 
     // random short delay - helps scatter the BR from all DNs
+    /**
+     *
+     * 延迟调度一次block report,
+     * 这边会做一些时间的设定，然后在BPServiceActor.run()方法，线程的主流程里面
+     * 会去开始进行 block report，第一次全量汇报自己的block
+     *
+     */
     scheduleBlockReport(dnConf.initialBlockReportDelay);
   }
 
@@ -897,7 +928,7 @@ class BPServiceActor implements Runnable {
           // setup storage
           // 封装了整个datanode第一次启动进行注册的全过程
           connectToNNAndHandshake();
-          break;
+          break; //方法执行结束之后，break掉，退出while循环
         } catch (IOException ioe) {
           // Initial handshake, storage recovery or registration failed
           runningState = RunningState.INIT_FAILED;
@@ -916,8 +947,16 @@ class BPServiceActor implements Runnable {
 
       runningState = RunningState.RUNNING;
 
+      /**
+       * 再次进入一个while true的循环
+       * BPServiceActor  BP 代表 Block Pool 的意思
+       */
       while (shouldRun()) {
         try {
+          /**
+           * 1. 每隔几秒钟发送心跳，在这里
+           * 2. 每个一段时间，汇报自己的block report，也是在这里
+           */
           offerService();
         } catch (Exception ex) {
           LOG.error("Exception in BPOfferService for " + this, ex);

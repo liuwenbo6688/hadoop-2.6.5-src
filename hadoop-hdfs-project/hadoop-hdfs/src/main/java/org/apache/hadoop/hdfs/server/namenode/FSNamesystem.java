@@ -5119,6 +5119,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       //get datanode commands
       final int maxTransfer = blockManager.getMaxReplicationStreams()
           - xmitsInProgress;
+      /**
+       * 找 DatanodeManager 来处理心跳
+       */
       DatanodeCommand[] cmds = blockManager.getDatanodeManager().handleHeartbeat(
           nodeReg, reports, blockPoolId, cacheCapacity, cacheUsed,
           xceiverCount, maxTransfer, failedVolumes);
@@ -5128,6 +5131,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
           haContext.getState().getServiceState(),
           getFSImage().getLastAppliedOrWrittenTxId());
 
+      /**
+       * 返回的Response封装 需要执行的command数组、当前namenode的状态
+       */
       return new HeartbeatResponse(cmds, haState, rollingUpgradeInfo);
     } finally {
       readUnlock();

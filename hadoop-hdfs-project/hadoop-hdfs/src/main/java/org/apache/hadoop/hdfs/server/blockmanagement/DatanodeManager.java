@@ -223,8 +223,14 @@ public class DatanodeManager {
     final int heartbeatRecheckInterval = conf.getInt(
         DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY, 
         DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_DEFAULT); // 5 minutes
+
+    /**
+     * 心跳检查过程中的间隔时间 是放大了很多的
+     * 2 * 5 分钟 + 10 * 3 秒
+     */
     this.heartbeatExpireInterval = 2 * heartbeatRecheckInterval
         + 10 * 1000 * heartbeatIntervalSeconds;
+
     final int blockInvalidateLimit = Math.max(20*(int)(heartbeatIntervalSeconds),
         DFSConfigKeys.DFS_BLOCK_INVALIDATE_LIMIT_DEFAULT);
     this.blockInvalidateLimit = conf.getInt(
@@ -514,9 +520,12 @@ public class DatanodeManager {
    */
   private void removeDatanode(DatanodeDescriptor nodeInfo) {
     assert namesystem.hasWriteLock();
+
+    // 和注册相反的操作
     heartbeatManager.removeDatanode(nodeInfo);
     blockManager.removeBlocksAssociatedTo(nodeInfo);
     networktopology.remove(nodeInfo);
+
     decrementVersionCount(nodeInfo.getSoftwareVersion());
 
     if (LOG.isDebugEnabled()) {
@@ -564,6 +573,8 @@ public class DatanodeManager {
 
   /** Is the datanode dead? */
   boolean isDatanodeDead(DatanodeDescriptor node) {
+    //如果  上次心跳时间 < 当前时间 - 心跳间隔时间
+    // 超过10多分钟
     return (node.getLastUpdate() <
             (Time.now() - heartbeatExpireInterval));
   }
@@ -1396,6 +1407,9 @@ public class DatanodeManager {
           return new DatanodeCommand[]{RegisterCommand.REGISTER};
         }
 
+        /**
+         * 更新心跳的逻辑，交给 heartbeatManager 完成
+         */
         heartbeatManager.updateHeartbeat(nodeinfo, reports,
                                          cacheCapacity, cacheUsed,
                                          xceiverCount, failedVolumes);
@@ -1406,6 +1420,15 @@ public class DatanodeManager {
           return new DatanodeCommand[0];
         }
 
+        /**
+         * 下面的一坨逻辑
+         * 主要是namenode在判断，这次datanode不是给我发送了一次心跳吗
+         * 我这里判断一下，当前是否有需要这个datanode执行的任务
+         * Command
+         * 比如说namenode发现我现在需要这个这个datanode去复制一个block副本给其他的datanode
+         * 此时就可能返回一个command给datanode
+         * datanode发送心跳之后，会收到namenode给他返回的一系列command，就会去执行那些command
+         */
         //check lease recovery
         BlockInfoUnderConstruction[] blocks = nodeinfo
             .getLeaseRecoveryCommand(Integer.MAX_VALUE);

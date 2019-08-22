@@ -23,9 +23,13 @@ package org.apache.hadoop.hdfs.server.protocol;
 public class StorageReport {
   private final DatanodeStorage storage;
   private final boolean failed;
+  //总的磁盘容量
   private final long capacity;
+  // 已经使用的磁盘空间
   private final long dfsUsed;
+  // 剩余磁盘空间
   private final long remaining;
+  //
   private final long blockPoolUsed;
 
   public static final StorageReport[] EMPTY_ARRAY = {};

@@ -53,6 +53,7 @@ class HeartbeatManager implements DatanodeStatistics {
 
   /** The time period to check for expired datanodes */
   private final long heartbeatRecheckInterval;
+
   /** Heartbeat monitor thread */
   private final Daemon heartbeatThread = new Daemon(new Monitor());
 
@@ -281,8 +282,12 @@ class HeartbeatManager implements DatanodeStatistics {
       int numOfStaleNodes = 0;
       int numOfStaleStorages = 0;
       synchronized(this) {
+
+        // 拿到所有的datanode进行循环判断
         for (DatanodeDescriptor d : datanodes) {
-          if (dead == null && dm.isDatanodeDead(d)) {
+          if (dead == null &&
+                  dm.isDatanodeDead(d) // 判断datanode是否宕机的逻辑 ，查过10分钟30秒
+                  ) {
             stats.incrExpiredHeartbeats();
             dead = d;
           }
@@ -318,6 +323,7 @@ class HeartbeatManager implements DatanodeStatistics {
             return;
           }
           synchronized(this) {
+            // 从集群中剔除
             dm.removeDeadDatanode(dead);
           }
         } finally {
@@ -342,6 +348,11 @@ class HeartbeatManager implements DatanodeStatistics {
   }
 
 
+  /**
+   * namenode启动的时候，自动启动后台线程
+   * 这个线程就是负责监控所有注册上来的datanode是否按时发送心跳，
+   * 如果没有按时发送心跳的话，就会认为这个datanode已经宕机了，此时就会将这个datanode从集群中移除掉
+   */
   /** Periodically check heartbeat and update block key */
   private class Monitor implements Runnable {
     private long lastHeartbeatCheck;
@@ -353,6 +364,9 @@ class HeartbeatManager implements DatanodeStatistics {
         try {
           final long now = Time.now();
           if (lastHeartbeatCheck + heartbeatRecheckInterval < now) {
+            /**
+             *  进行心跳检查
+             */
             heartbeatCheck();
             lastHeartbeatCheck = now;
           }

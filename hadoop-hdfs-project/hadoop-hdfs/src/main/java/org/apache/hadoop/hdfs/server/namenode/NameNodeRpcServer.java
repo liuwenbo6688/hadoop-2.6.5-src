@@ -1162,6 +1162,9 @@ class NameNodeRpcServer implements NamenodeProtocols {
       throws IOException {
     checkNNStartup();
     verifySoftwareVersion(nodeReg);
+      /**
+       *
+       */
     namesystem.registerDatanode(nodeReg);
     return nodeReg;
   }
@@ -1173,6 +1176,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
       int failedVolumes) throws IOException {
     checkNNStartup();
     verifyRequest(nodeReg);
+    // 处理心跳
     return namesystem.handleHeartbeat(nodeReg, report,
         dnCacheCapacity, dnCacheUsed, xceiverCount, xmitsInProgress,
         failedVolumes);
