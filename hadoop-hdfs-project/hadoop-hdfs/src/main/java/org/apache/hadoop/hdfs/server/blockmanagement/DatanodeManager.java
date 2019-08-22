@@ -982,6 +982,9 @@ public class DatanodeManager {
         return;
       }
 
+      /**
+       * 创建一个 DatanodeDescriptor
+       */
       DatanodeDescriptor nodeDescr 
         = new DatanodeDescriptor(nodeReg, NetworkTopology.DEFAULT_RACK);
       boolean success = false;
@@ -996,17 +999,28 @@ public class DatanodeManager {
           nodeDescr.setDependentHostNames(
               getNetworkDependenciesWithDefault(nodeDescr));
         }
+
+        /**
+         *
+         */
         networktopology.add(nodeDescr);
         nodeDescr.setSoftwareVersion(nodeReg.getSoftwareVersion());
   
         // register new datanode
+        /**
+         *  这才是注册datanode最核心的逻辑
+         */
         addDatanode(nodeDescr);
         checkDecommissioning(nodeDescr);
         
         // also treat the registration message as a heartbeat
         // no need to update its timestamp
         // because its is done when the descriptor is created
+        /**
+         *
+         */
         heartbeatManager.addDatanode(nodeDescr);
+
         success = true;
         incrementVersionCount(nodeReg.getSoftwareVersion());
       } finally {

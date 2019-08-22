@@ -1373,13 +1373,23 @@ public class DataNode extends ReconfigurableBase
     
     // In the case that this is the first block pool to connect, initialize
     // the dataset, block scanners, etc.
+    /**
+     *
+     */
     initStorage(nsInfo);
 
     // Exclude failed disks before initializing the block pools to avoid startup
     // failures.
     checkDiskError();
 
+    /**
+     *
+     */
     data.addBlockPool(nsInfo.getBlockPoolID(), conf);
+
+    /**
+     *
+     */
     initPeriodicScanners(conf);
   }
 
@@ -1420,6 +1430,7 @@ public class DataNode extends ReconfigurableBase
 
     synchronized(this)  {
       if (data == null) {
+        // 创建一个FsDatasetSpi
         data = factory.newInstance(this, storage, conf);
       }
     }
@@ -2551,6 +2562,9 @@ public class DataNode extends ReconfigurableBase
       System.exit(0);
     }
 
+    /**
+     *
+     */
     secureMain(args, null);
   }
 

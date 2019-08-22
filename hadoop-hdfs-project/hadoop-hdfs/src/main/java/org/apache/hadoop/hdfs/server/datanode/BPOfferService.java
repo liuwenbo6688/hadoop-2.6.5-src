@@ -185,6 +185,7 @@ class BPOfferService {
   }
 
   NamespaceInfo getNamespaceInfo() {
+    //所有读取 NamespaceInfo 都要上读锁
     readLock();
     try {
       return bpNSInfo;
@@ -308,13 +309,16 @@ class BPOfferService {
     writeLock();
     try {
       if (this.bpNSInfo == null) {
-        this.bpNSInfo = nsInfo;
+        this.bpNSInfo = nsInfo; // 第1个namenode返回 NamespaceInfo，只保存
         boolean success = false;
 
         // Now that we know the namespace ID, etc, we can pass this to the DN.
         // The DN can now initialize its local storage if we are the
         // first BP to handshake, etc.
         try {
+          /**
+           *  第一个BP握手成功后，就可以进行datanode 本地存储（local storage） 的初始化
+           */
           dn.initBlockPool(this);
           success = true;
         } finally {
@@ -326,6 +330,7 @@ class BPOfferService {
           }
         }
       } else {
+        // 第2个namenode返回NamespaceInfo，比较2个NamespaceInfo的某些信息是否匹配
         checkNSEquality(bpNSInfo.getBlockPoolID(), nsInfo.getBlockPoolID(),
             "Blockpool ID");
         checkNSEquality(bpNSInfo.getNamespaceID(), nsInfo.getNamespaceID(),

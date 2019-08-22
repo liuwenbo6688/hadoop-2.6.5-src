@@ -77,7 +77,7 @@ import com.google.common.collect.Maps;
 class BPServiceActor implements Runnable {
   
   static final Log LOG = DataNode.LOG;
-  final InetSocketAddress nnAddr;
+  final InetSocketAddress nnAddr;// BPServiceActor对应的namenode的地址
   HAServiceState state;
 
   final BPOfferService bpos;
@@ -172,6 +172,9 @@ class BPServiceActor implements Runnable {
     NamespaceInfo nsInfo = null;
     while (shouldRun()) {
       try {
+        /**
+         * 1. 请求一个namenode，拿到NamespaceInfo
+         */
         nsInfo = bpNamenode.versionRequest();
         LOG.debug(this + " received versionRequest response: " + nsInfo);
         break;
@@ -186,6 +189,7 @@ class BPServiceActor implements Runnable {
     }
     
     if (nsInfo != null) {
+      // 2. 检查版本信息
       checkNNVersion(nsInfo);
     } else {
       throw new IOException("DN shut down before block pool connected");
@@ -214,18 +218,31 @@ class BPServiceActor implements Runnable {
 
   private void connectToNNAndHandshake() throws IOException {
     // get NN proxy
+    // bpNamenode 其实就是一个负责进行rpc接口调用的东西，通过这个东西可以让BPServiceActor以rpc接口调用的方式，去请求namenode
+    // bpNamenode就是一个rpc接口调用的代理，在datanode获取一个rpc代理之后，就可以通过这个代理跟 namenode 进行通信
     bpNamenode = dn.connectToNN(nnAddr);
 
     // First phase of the handshake with NN - get the namespace
     // info.
+    // 通过上面的bpNamenode作为一个rpc代理，调用了namenode的一个rpc接口
+    // 获得了一个namenode的 NamespaceInfo
+    // NamespaceInfo大概包含了一些namenode的id，比如说 clusterId，nsId，blockPoolId
     NamespaceInfo nsInfo = retrieveNamespaceInfo();
     
     // Verify that this matches the other NN in this HA pair.
     // This also initializes our block pool in the DN if we are
     // the first NN connection for this BP.
+    /**
+     * 1. 两个namenode都会返回一个 NamespaceInfo，此处就会在第二个namenode返回NamespaceInfo的时候
+     *    进行两个 NamespaceInfo 的校验，检查一下他们俩其实是一样的
+     * 2. 第一个namenode返回了 NamespaceInfo 之后，一定会在datanode里初始化 DataStorage，里面会初始化对应block的存储空间
+     *    启动一些block相关的后台线程
+     *
+     */
     bpos.verifyAndSetNamespaceInfo(nsInfo);
     
     // Second phase of the handshake with the NN.
+    // 进行注册
     register();
   }
 
@@ -625,10 +642,15 @@ class BPServiceActor implements Runnable {
   
   //This must be called only by BPOfferService
   void start() {
+
+    /**
+     *
+     */
     if ((bpThread != null) && (bpThread.isAlive())) {
       //Thread is started already
       return;
     }
+
     bpThread = new Thread(this, formatThreadName());
     bpThread.setDaemon(true); // needed for JUnit testing
     bpThread.start();
@@ -811,6 +833,7 @@ class BPServiceActor implements Runnable {
   void register() throws IOException {
     // The handshake() phase loaded the block pool storage
     // off disk - so update the bpRegistration object from that info
+    //
     bpRegistration = bpos.createRegistration();
 
     LOG.info(this + " beginning handshake with NN");
@@ -818,6 +841,9 @@ class BPServiceActor implements Runnable {
     while (shouldRun()) {
       try {
         // Use returned registration from namenode with updated fields
+        /**
+         * 向namenode注册
+         */
         bpRegistration = bpNamenode.registerDatanode(bpRegistration);
         break;
       } catch(EOFException e) {  // namenode might have just restarted
@@ -859,11 +885,17 @@ class BPServiceActor implements Runnable {
   public void run() {
     LOG.info(this + " starting to offer service");
 
+    /**
+     * BPServiceActor 是一个线程
+     * 启动之后就会执行run()方法
+     */
+
     try {
       while (true) {
         // init stuff
         try {
           // setup storage
+          // 封装了整个datanode第一次启动进行注册的全过程
           connectToNNAndHandshake();
           break;
         } catch (IOException ioe) {
