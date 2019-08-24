@@ -46,6 +46,12 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 /** I-node for closed file. */
+/**
+ * linux里面，inode就代表了文件目录中的一个节点，可以使目录，也可以是文件
+ * hdfs里面借鉴了linux的概念
+ * 如果是目录的话，INodeDirectory
+ * 如果是文件的话，INodeFile
+ */
 @InterfaceAudience.Private
 public class INodeFile extends INodeWithAdditionalFields
     implements INodeFileAttributes, BlockCollection {
@@ -115,6 +121,13 @@ public class INodeFile extends INodeWithAdditionalFields
 
   private long header = 0L;
 
+  /**
+   * INodeFile中一个关键的东西，就是这个blocks
+   * BlockInfo[] 数组，这个文件划分了哪些block
+   *
+   * 最为关键的就是这个文件会被切分为一个或者多个block
+   *  1GB的文件会被切分为8个block
+   */
   private BlockInfo[] blocks;
 
   INodeFile(long id, byte[] name, PermissionStatus permissions, long mtime,

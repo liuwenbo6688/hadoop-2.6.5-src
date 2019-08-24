@@ -411,7 +411,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   private final List<AuditLogger> auditLoggers;
 
   /** The namespace tree. */
+  // dir 就是目录树的结构 （FSDirectory）
   FSDirectory dir;
+
   private final BlockManager blockManager;
   private final SnapshotManager snapshotManager;
   private final CacheManager cacheManager;
@@ -1537,6 +1539,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   public static List<URI> getSharedEditsDirs(Configuration conf) {
     // don't use getStorageDirs here, because we want an empty default
     // rather than the dir in /tmp
+    // dfs.namenode.shared.edits.dir
     Collection<String> dirNames = conf.getTrimmedStringCollection(
         DFS_NAMENODE_SHARED_EDITS_DIR_KEY);
     return Util.stringCollectionAsURIs(dirNames);
@@ -2451,6 +2454,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
   /**
    * Verify that parent directory of src exists.
+   * 检查父目录是否存在
    */
   private void verifyParentDir(String src) throws FileNotFoundException,
       ParentNotDirectoryException, UnresolvedLinkException {
@@ -4265,6 +4269,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       boolean createParent) throws IOException, UnresolvedLinkException {
     boolean ret = false;
     try {
+      /**
+       *
+       */
       ret = mkdirsInt(src, permissions, createParent);
     } catch (AccessControlException e) {
       logAuditEvent(false, "mkdirs", src);
@@ -4282,23 +4289,49 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     if (!DFSUtil.isValidName(src)) {
       throw new InvalidPathException(src);
     }
+
+    // 主要是检查hdfs操作文件系统的权限
     FSPermissionChecker pc = getPermissionChecker();
     checkOperation(OperationCategory.WRITE);
+
+
+
+    // 通过了解了 FSDirectory 是干什么的一个组件之后，回过头来再来看看，发现这行代码其实不是关键代码
+    // 他是用来处理一些特殊场景的，比如src是以 "/.reserved" 打头的
+    // 正常情况下返回的是null
     byte[][] pathComponents = FSDirectory.getPathComponentsForReservedPath(src);
     HdfsFileStatus resultingStat = null;
     boolean status = false;
+
+    /**
+     * 下面的这坨代码，核心的代码执行
+     * 主要走 mkdirsInternal() 方法
+     * 1、就是在内存中的文件目录中加入要创建的目录
+     * 2、肯定会写入一个 edits log 到磁盘文件中去，记录本次数据更新的操作
+     */
     writeLock();
     try {
       checkOperation(OperationCategory.WRITE);   
       checkNameNodeSafeMode("Cannot create directory " + src);
+
       src = resolvePath(src, pathComponents);
+
+      /**
+       *
+       */
       status = mkdirsInternal(pc, src, permissions, createParent);
+
       if (status) {
         resultingStat = getAuditFileInfo(src, false);
       }
     } finally {
       writeUnlock();
     }
+
+    /**
+     * 3、edits log 到磁盘文件中去，上面的2步骤，仅仅可能是将edits log写入了内存的缓冲区
+     * 可能还没有强制同步到磁盘里面
+     */
     getEditLog().logSync();
     if (status) {
       logAuditEvent(true, "mkdirs", srcArg, null, resultingStat);
@@ -4312,7 +4345,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   private boolean mkdirsInternal(FSPermissionChecker pc, String src,
       PermissionStatus permissions, boolean createParent) 
       throws IOException, UnresolvedLinkException {
-    assert hasWriteLock();
+    assert hasWriteLock();// 判断必须加了写锁
     if (isPermissionEnabled) {
       checkTraverse(pc, src);
     }
@@ -4333,6 +4366,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     // create multiple inodes.
     checkFsObjectLimit();
 
+    /**
+     * 核心方法是 mkdirsRecursively() 方法
+     */
     if (!mkdirsRecursively(src, permissions, false, now())) {
       throw new IOException("Failed to create directory: " + src);
     }
@@ -4362,11 +4398,17 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
                  UnresolvedLinkException, SnapshotAccessControlException,
                  AclException {
     src = FSDirectory.normalizePath(src);
+
+    /**
+     *
+     */
     byte[][] components = INode.getPathComponents(src);
     final int lastInodeIndex = components.length - 1;
 
-    dir.writeLock();
+    dir.writeLock();// 又加了一次写锁
     try {
+
+      //
       INodesInPath iip = dir.getExistingPathINodes(components);
       if (iip.isSnapshot()) {
         throw new SnapshotAccessControlException(
@@ -4380,6 +4422,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       for(; i < inodes.length && inodes[i] != null; i++) {
         pathbuilder.append(Path.SEPARATOR).
             append(DFSUtil.bytes2String(components[i]));
+
         if (!inodes[i].isDirectory()) {
           throw new FileAlreadyExistsException(
                   "Parent path is not a directory: "
@@ -4420,9 +4463,17 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       }
 
       // create directories beginning from the first null index
+      // 从上一个循环接着继续
       for(; i < inodes.length; i++) {
         pathbuilder.append(Path.SEPARATOR).
             append(DFSUtil.bytes2String(components[i]));
+
+        /**
+         * 假设： /user/hive/warehouse/data
+         * 已经存在 /user/hive/warehouse
+         * 按照这个for循环的逻辑，就会先搞一个 /user/hive/warehouse的 INodeDirectory，给挂到目录树里面去
+         * 然后再创建一个   /user/hive/warehouse/data 对应的 INodeDirectory，给挂到目录树里面去
+         */
         dir.unprotectedMkdir(allocateNewInodeId(), iip, i, components[i],
                 (i < lastInodeIndex) ? parentPermissions : permissions, null,
                 now);
@@ -4434,7 +4485,15 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         NameNode.getNameNodeMetrics().incrFilesCreated();
 
         final String cur = pathbuilder.toString();
+
+        /**
+         * 关键性逻辑
+         * 往 edits log中写日志
+         * FSEditLog 是一个核心组件，他主要是操作完内存中的文件目录树之后，
+         * 然后输出操作日志到磁盘上的 edits log文件中去
+         */
         getEditLog().logMkDir(cur, inodes[i]);
+
         if(NameNode.stateChangeLog.isDebugEnabled()) {
           NameNode.stateChangeLog.debug(
                   "mkdirs: created directory " + cur);

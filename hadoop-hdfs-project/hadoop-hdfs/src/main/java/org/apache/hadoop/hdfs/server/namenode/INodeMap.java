@@ -33,7 +33,12 @@ import com.google.common.base.Preconditions;
 
 /**
  * Storing all the {@link INode}s and maintaining the mapping between INode ID
- * and INode.  
+ * and INode.
+ * 存储所有的inode，并且维护一份 inode-id 和 inode 之间的映射关系
+ * 所以我们知道 INodeMap 其实确实是一个很关键的数据结构，但是不是文件目录树
+ *
+ * 他这个数据结构是为了方便映射关系查找inode的数据，从树形结构查找比较麻烦
+ *
  */
 public class INodeMap {
   

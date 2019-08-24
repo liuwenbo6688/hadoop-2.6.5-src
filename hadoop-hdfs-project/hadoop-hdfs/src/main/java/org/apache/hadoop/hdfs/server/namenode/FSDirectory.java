@@ -102,7 +102,14 @@ import org.apache.hadoop.security.AccessControlException;
  * FSDirectory is a pure in-memory data structure, all of whose operations
  * happen entirely in memory. In contrast, FSNamesystem persists the operations
  * to the disk.
+ *
+ *
  * @see org.apache.hadoop.hdfs.server.namenode.FSNamesystem
+ *
+ *  FSDirectory 是一个纯内存的结构，对他发起的所有操作，都是在内存中执行的
+ *  FSDirectory 这个组件其实就是 维护内存里文件目录树(元数据)的一个核心组件
+ *
+ *
  **/
 @InterfaceAudience.Private
 public class FSDirectory implements Closeable {
@@ -137,7 +144,18 @@ public class FSDirectory implements Closeable {
   private final XAttr UNREADABLE_BY_SUPERUSER_XATTR =
       XAttrHelper.buildXAttr(SECURITY_XATTR_UNREADABLE_BY_SUPERUSER, null);
 
+  /**
+   * 所谓的根目录
+   * 从这个rootDir往下延伸，就是内存里的文件目录树
+   * 这个其实就是文件目录树的一个根节点
+   * INodeDirectory 本质是一个 INode，inode概念模仿了linux中的概念
+   * linux里面，inode就代表了文件目录中的一个节点，可以使目录，也可以是文件
+   * hdfs里面借鉴了linux的概念
+   * 如果是目录的话，INodeDirectory
+   * 如果是文件的话，INodeFile
+   */
   INodeDirectory rootDir;
+
   private final FSNamesystem namesystem;
   private volatile boolean skipQuotaCheck = false; //skip while consuming edits
   private final int maxComponentLength;
@@ -145,10 +163,17 @@ public class FSDirectory implements Closeable {
   private final int lsLimit;  // max list limit
   private final int contentCountLimit; // max content summary counts per run
   private final long contentSleepMicroSec;
+
+  /**
+   *  可能比较关键的内存结构
+   */
   private final INodeMap inodeMap; // Synchronized by dirLock
+
   private long yieldCount = 0; // keep track of lock yield count.
   private final int inodeXAttrsLimit; //inode xattrs max limit
 
+  // 读写锁专门用来负责对内存中的文件目录树读写操作的时候，进行同步的
+  // 读锁和读锁可以不互斥  写锁和读锁是互斥的
   // lock to protect the directory and BlockMap
   private final ReentrantReadWriteLock dirLock;
 
@@ -3164,6 +3189,7 @@ public class FSDirectory implements Closeable {
 
   /** Check if a given path is reserved */
   public static boolean isReservedName(String src) {
+    // 如果指定的目录是   "/.reserved" 开头的话，就是使用了预留的目录
     return src.startsWith(DOT_RESERVED_PATH_PREFIX);
   }
 

@@ -48,6 +48,16 @@ import com.google.common.collect.ImmutableList;
 /**
  * Directory INode class.
  */
+/**
+ * 所谓的根目录
+ * 从这个rootDir往下延伸，就是内存里的文件目录树
+ * 这个其实就是文件目录树的一个根节点
+ * INodeDirectory 本质是一个 INode，inode概念模仿了linux中的概念
+ * linux里面，inode就代表了文件目录中的一个节点，可以使目录，也可以是文件
+ * hdfs里面借鉴了linux的概念
+ * 如果是目录的话，INodeDirectory
+ * 如果是文件的话，INodeFile
+ */
 public class INodeDirectory extends INodeWithAdditionalFields
     implements INodeDirectoryAttributes {
 
@@ -67,6 +77,9 @@ public class INodeDirectory extends INodeWithAdditionalFields
   protected static final int DEFAULT_FILES_PER_DIRECTORY = 5;
   final static byte[] ROOT_NAME = DFSUtil.string2Bytes("");
 
+  /**
+   * 树形的数据结构
+   */
   private List<INode> children = null;
   
   /** constructor */

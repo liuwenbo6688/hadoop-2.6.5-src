@@ -81,7 +81,9 @@ public class Journal implements Closeable {
 
 
   // Current writing state
+  // 落地到磁盘中去，所以使用 EditLogFileOutputStream
   private EditLogOutputStream curSegment;
+
   private long curSegmentTxId = HdfsConstants.INVALID_TXID;
   private long nextTxId = HdfsConstants.INVALID_TXID;
   private long highestWrittenTxId = 0;
@@ -371,7 +373,12 @@ public class Journal implements Closeable {
     // "catching up" with the rest. Hence we do not need to fsync.
     boolean isLagging = lastTxnId <= committedTxnId.get();
     boolean shouldFsync = !isLagging;
-    
+
+    /**
+     * 对于journal node来讲，肯定是要落地到磁盘中去的
+     * curSegment 用的是 EditLogFileOutputStream
+     * 也是用的双缓冲
+     */
     curSegment.writeRaw(records, 0, records.length);
     curSegment.setReadyToFlush();
     Stopwatch sw = new Stopwatch();

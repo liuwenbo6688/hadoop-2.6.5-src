@@ -90,6 +90,7 @@ public class JournalSet implements JournalManager {
   static class JournalAndStream implements CheckableNameNodeResource {
     private final JournalManager journal;
     private boolean disabled = false;
+
     private EditLogOutputStream stream;
     private final boolean required;
     private final boolean shared;
@@ -104,6 +105,12 @@ public class JournalSet implements JournalManager {
     public void startLogSegment(long txId, int layoutVersion) throws IOException {
       Preconditions.checkState(stream == null);
       disabled = false;
+      /**
+       * 根据封装的JournalManager，就可以拿到一个对应的流
+       *
+       * FileJournalManager   ->  EditLogFileOutputStream
+       * QuorumJournalManager ->  QuorumOutputStream
+       */
       stream = journal.startLogSegment(txId, layoutVersion);
     }
 
@@ -146,6 +153,12 @@ public class JournalSet implements JournalManager {
      * Should be used outside JournalSet only for testing.
      */
     EditLogOutputStream getCurrentStream() {
+      /**
+       * 根据封装的JournalManager，就可以拿到一个对应的流
+       *
+       * FileJournalManager   ->  EditLogFileOutputStream
+       * QuorumJournalManager ->  QuorumOutputStream
+       */
       return stream;
     }
     
@@ -189,8 +202,12 @@ public class JournalSet implements JournalManager {
   // COW implementation is necessary since some users (eg the web ui) call
   // getAllJournalStreams() and then iterate. Since this is rarely
   // mutated, there is no performance concern.
+  /**
+   *
+   */
   private final List<JournalAndStream> journals =
       new CopyOnWriteArrayList<JournalSet.JournalAndStream>();
+
   final int minimumRedundantJournals;
 
   private boolean closed;
@@ -216,12 +233,20 @@ public class JournalSet implements JournalManager {
   @Override
   public EditLogOutputStream startLogSegment(final long txId,
       final int layoutVersion) throws IOException {
+    /**
+     * 这边的闭包逻辑，没有看懂，有点绕和晦涩，尼玛的
+     */
     mapJournalsAndReportErrors(new JournalClosure() {
       @Override
       public void apply(JournalAndStream jas) throws IOException {
+        /**
+         *
+         */
         jas.startLogSegment(txId, layoutVersion);
       }
     }, "starting log segment " + txId);
+
+
     return new JournalSetOutputStream();
   }
   
@@ -388,6 +413,8 @@ public class JournalSet implements JournalManager {
       JournalClosure closure, String status) throws IOException{
 
     List<JournalAndStream> badJAS = Lists.newLinkedList();
+
+    // 遍历自己 JournalSet 内部的多个流，都在 journals 里面
     for (JournalAndStream jas : journals) {
       try {
         closure.apply(jas);
@@ -449,6 +476,14 @@ public class JournalSet implements JournalManager {
         @Override
         public void apply(JournalAndStream jas) throws IOException {
           if (jas.isActive()) {
+            /**
+             * 比如说，有一个 JournalAndStream 底层封装的是 FileJournalManager
+             * 此时就先基于FileJournalManager，执行 getCurrentStream() ，获取到针对磁盘文件的流
+             * 使用针对磁盘文件的那个流的write()方法，将edits log 写到磁盘文件中去
+             *
+             * FileJournalManager   ->  EditLogFileOutputStream
+             * QuorumJournalManager ->  QuorumOutputStream
+             */
             jas.getCurrentStream().write(op);
           }
         }
@@ -588,6 +623,9 @@ public class JournalSet implements JournalManager {
   }
   
   void add(JournalManager j, boolean required, boolean shared) {
+    /**
+     *
+     */
     JournalAndStream jas = new JournalAndStream(j, required, shared);
     journals.add(jas);
   }

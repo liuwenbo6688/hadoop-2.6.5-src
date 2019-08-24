@@ -94,7 +94,12 @@ public class QuorumJournalManager implements JournalManager {
   private final URI uri;
   private final NamespaceInfo nsInfo;
   private boolean isActiveWriter;
-  
+
+  /**
+   * 他里面封装了多个 AsyncLogger
+   * 在flush的时候，他会通过这个组件，里面每个 AsyncLogger 都会往一个 journal node发送edits log
+   * 里面封装了一个 quorum算法，只要大多数的journal node都写成功了，就算ok了
+   */
   private final AsyncLoggerSet loggers;
 
   private int outputBufferCapacity = 512 * 1024;

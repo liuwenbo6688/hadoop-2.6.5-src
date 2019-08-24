@@ -34,13 +34,26 @@ import com.google.common.base.Preconditions;
  * is flushed, the two internal buffers are swapped. This allows edits
  * to progress concurrently to flushes without allocating new buffers each
  * time.
+ * 内存双缓冲
+ * 新的edits log是写入到第一个buffer缓冲区里面去的，他里面有两个buffer缓冲区的
+ * 第二个buffer缓冲区是用来刷新内存数据到磁盘上或者网络中去的
+ * 每次双缓冲区刷新的时候（第二个buffer缓冲区被刷新到磁盘或者网络），两个buffer缓冲区会被交换一下
+ * 这个可以允许edits log持续写入内存缓冲，还可以同时将内存缓冲中的数据刷新到磁盘或者网络中去
+ *
+ *
  */
 @InterfaceAudience.Private
 public class EditsDoubleBuffer {
 
+  /**
+   *  里面放了两个缓冲区
+   *
+   */
   private TxnBuffer bufCurrent; // current buffer for writing
   private TxnBuffer bufReady; // buffer ready for flushing
   private final int initBufferSize;
+
+
 
   public EditsDoubleBuffer(int defaultBufferSize) {
     initBufferSize = defaultBufferSize;
@@ -50,6 +63,7 @@ public class EditsDoubleBuffer {
   }
     
   public void writeOp(FSEditLogOp op) throws IOException {
+    // 只是写到双缓冲中的一个缓冲区而已哦
     bufCurrent.writeOp(op);
   }
 
@@ -70,7 +84,10 @@ public class EditsDoubleBuffer {
     IOUtils.cleanup(null, bufCurrent, bufReady);
     bufCurrent = bufReady = null;
   }
-  
+
+  /**
+   * 交换两个缓冲区
+   */
   public void setReadyToFlush() {
     assert isFlushed() : "previous data not flushed yet";
     TxnBuffer tmp = bufReady;

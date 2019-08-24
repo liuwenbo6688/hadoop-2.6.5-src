@@ -99,6 +99,9 @@ import com.google.common.base.Preconditions;
  * This object is the way end-user code interacts with a Hadoop
  * DistributedFileSystem.
  *
+ *  DistributedFileSystem 是 FileSystem 的一个子类
+ *
+ *
  *****************************************************************/
 @InterfaceAudience.LimitedPrivate({ "MapReduce", "HBase" })
 @InterfaceStability.Unstable
@@ -108,6 +111,7 @@ public class DistributedFileSystem extends FileSystem {
   private String homeDirPrefix =
       DFSConfigKeys.DFS_USER_HOME_DIR_PREFIX_DEFAULT;
 
+  // 这就是执行hdfs操作的 DFSClient
   DFSClient dfs;
   private boolean verifyChecksum = true;
   
@@ -867,6 +871,8 @@ public class DistributedFileSystem extends FileSystem {
       @Override
       public Boolean doCall(final Path p)
           throws IOException, UnresolvedLinkException {
+        // 真正执行都是走 DFSClient 的方法，
+        // 进去看
         return dfs.mkdirs(getPathName(p), permission, createParent);
       }
 

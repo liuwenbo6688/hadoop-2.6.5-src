@@ -48,6 +48,13 @@ import com.google.common.base.Preconditions;
  * This is a base INode class containing common fields for file and 
  * directory inodes.
  */
+
+/**
+ * linux里面，inode就代表了文件目录中的一个节点，可以使目录，也可以是文件
+ * hdfs里面借鉴了linux的概念
+ * 如果是目录的话，INodeDirectory
+ * 如果是文件的话，INodeFile
+ */
 @InterfaceAudience.Private
 public abstract class INode implements INodeAttributes, Diff.Element<byte[]> {
   public static final Log LOG = LogFactory.getLog(INode.class);

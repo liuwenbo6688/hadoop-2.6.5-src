@@ -82,6 +82,8 @@ public class IPCLoggerChannel implements AsyncLogger {
   /**
    * Executes tasks submitted to it serially, on a single thread, in FIFO order
    * (generally used for write tasks that should not be reordered).
+   *  用的 google的guava包
+   *  每个AsyncLogger（IPCLoggerChannel）都有一个单线程的线程池
    */
   private final ListeningExecutorService singleThreadExecutor;
   /**
@@ -375,6 +377,7 @@ public class IPCLoggerChannel implements AsyncLogger {
     
     ListenableFuture<Void> ret = null;
     try {
+      //单线程的线程池，异步发送请求
       ret = singleThreadExecutor.submit(new Callable<Void>() {
         @Override
         public Void call() throws IOException {
@@ -382,8 +385,13 @@ public class IPCLoggerChannel implements AsyncLogger {
 
           long rpcSendTimeNanos = System.nanoTime();
           try {
+            /**
+             * 核心代码
+             * 往journal node 推送数据
+             */
             getProxy().journal(createReqInfo(),
-                segmentTxId, firstTxnId, numTxns, data);
+                segmentTxId, firstTxnId, numTxns, data /*data代表一个buf缓冲的数据*/ );
+
           } catch (IOException e) {
             QuorumJournalManager.LOG.warn(
                 "Remote journal " + IPCLoggerChannel.this + " failed to " +

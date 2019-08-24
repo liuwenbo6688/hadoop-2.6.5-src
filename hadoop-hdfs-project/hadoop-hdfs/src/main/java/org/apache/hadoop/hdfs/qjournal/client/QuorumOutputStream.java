@@ -29,7 +29,11 @@ import org.apache.hadoop.io.DataOutputBuffer;
  * remote journals.
  */
 class QuorumOutputStream extends EditLogOutputStream {
+
+  // loggers 是从QuorumJournalManager中传递过来的
   private final AsyncLoggerSet loggers;
+
+  // 也是一个双缓冲
   private EditsDoubleBuffer buf;
   private final long segmentTxId;
   private final int writeTimeoutMs;
@@ -46,6 +50,7 @@ class QuorumOutputStream extends EditLogOutputStream {
 
   @Override
   public void write(FSEditLogOp op) throws IOException {
+    // 也是写到双缓冲中去
     buf.writeOp(op);
   }
 
@@ -79,6 +84,7 @@ class QuorumOutputStream extends EditLogOutputStream {
     buf.setReadyToFlush();
   }
 
+
   @Override
   protected void flushAndSync(boolean durable) throws IOException {
     int numReadyBytes = buf.countReadyBytes();
@@ -95,15 +101,33 @@ class QuorumOutputStream extends EditLogOutputStream {
       // 2) because the calls to the underlying nodes are asynchronous, we
       //    need a defensive copy to avoid accidentally mutating the buffer
       //    before it is sent.
+      /**
+       * 一次性把buffer里的数据发送到journal node里面去
+       * 以为是异步发送的，防止还没发送的时候，buffer里的数据被修改了
+       * 所有先把buffer里的数据copy到一个新的字节数组里面去
+       */
+      // 下面两行代码就是把buf里的数据先写到一个新的DataOutputBuffer里面去
       DataOutputBuffer bufToSend = new DataOutputBuffer(numReadyBytes);
       buf.flushTo(bufToSend);
+
       assert bufToSend.getLength() == numReadyBytes;
-      byte[] data = bufToSend.getData();
+      byte[] data = bufToSend.getData();// 新的字节数组
       assert data.length == bufToSend.getLength();
 
+      /**
+       * 通过 AsyncLoggerSet 组件到大多数的 journal node上去
+       * AsyncLoggerSet loggers  是从QuorumJournalManager中传递过来的
+       */
       QuorumCall<AsyncLogger, Void> qcall = loggers.sendEdits(
           segmentTxId, firstTxToFlush,
           numReadyTxns, data);
+
+      // 必须等待大多数journal node成功从以后，阻塞住
+      /**
+       * 通过观察每个Future的结果，来实现quorum算法
+       * 3个journal node，必须有 (3/2) + 1 = 2 个都推送成功了才可以
+       * 5个journal node，必须有 (5/2) + 1 = 3 个都推送成功了才可以
+       */
       loggers.waitForWriteQuorum(qcall, writeTimeoutMs, "sendEdits");
       
       // Since we successfully wrote this batch, let the loggers know. Any future

@@ -234,6 +234,12 @@ import com.google.common.net.InetAddresses;
  * DistributedFileSystem, which uses DFSClient to handle
  * filesystem tasks.
  *
+ * DFSClient可以连接到hadoop文件系统（hdfs） 和 执行一些基础性的文件操作
+ * 使用ClientProtocol的协议跟namenode进程进行通信，以及可以直接连接到DataNode上读写block数据
+ *
+ * hdfs用户应该获取一个 DistributedFileSystem 对象实例，这个对象实例底层会通过 DFSClient来处理文件系统的操作
+ *
+ *
  ********************************************************/
 @InterfaceAudience.Private
 public class DFSClient implements java.io.Closeable, RemotePeerFactory,
@@ -2739,7 +2745,16 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
       LOG.debug(src + ": masked=" + absPermission);
     }
     try {
+      /**
+       *  这里会跟namenode进行通信
+       *  创建目录这事，其实和datanode是没有关系的
+       *  目录只是元数据，他仅仅存在于namenode的文件目录系统里，内存、fsimage，所以仅仅跟 namenode 有关系
+       *  直接走rpc协议，直接走网络请求，调用了namenode提供的RPC接口
+       *
+       *
+       */
       return namenode.mkdirs(src, absPermission, createParent);
+
     } catch(RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
                                      InvalidPathException.class,

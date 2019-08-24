@@ -46,6 +46,7 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
   public static final int MIN_PREALLOCATION_LENGTH = 1024 * 1024;
 
   private File file;
+  //存储本地 edit logs 的文件流
   private FileOutputStream fp; // file stream for storing edit logs
   private FileChannel fc; // channel of the file stream for sync
   private EditsDoubleBuffer doubleBuf;
@@ -94,6 +95,9 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
 
   @Override
   public void write(FSEditLogOp op) throws IOException {
+    /**
+     * 内存双缓冲
+     */
     doubleBuf.writeOp(op);
   }
 
@@ -201,7 +205,10 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
       return;
     }
     preallocate(); // preallocate file if necessary
+
+    //刷新到edits log的文件流里面
     doubleBuf.flushTo(fp);
+
     if (durable && !shouldSkipFsyncForTests && !shouldSyncWritesAndSkipFsync) {
       fc.force(false); // metadata updates not needed
     }

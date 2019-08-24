@@ -122,7 +122,10 @@ class AsyncLoggerSet {
    */
   <V> Map<AsyncLogger, V> waitForWriteQuorum(QuorumCall<AsyncLogger, V> q,
       int timeoutMs, String operationName) throws IOException {
+
+    //数量除以2+1的逻辑就在这里
     int majority = getMajoritySize();
+
     try {
       q.waitFor(
           loggers.size(), // either all respond 
@@ -254,6 +257,8 @@ class AsyncLoggerSet {
       long segmentTxId, long firstTxnId, int numTxns, byte[] data) {
     Map<AsyncLogger, ListenableFuture<Void>> calls = Maps.newHashMap();
     for (AsyncLogger logger : loggers) {
+
+      // 对每个 AsyncLogger 调用  sendEdits方法，通过rpc调用发送到journal node上去
       ListenableFuture<Void> future = 
         logger.sendEdits(segmentTxId, firstTxnId, numTxns, data);
       calls.put(logger, future);
