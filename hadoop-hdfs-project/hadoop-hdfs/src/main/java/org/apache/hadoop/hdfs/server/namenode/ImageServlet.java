@@ -442,6 +442,10 @@ public class ImageServlet extends HttpServlet {
     return params;
   }
 
+
+  /**
+   * standby namenode 发送过来的fsimage文件走的是put请求
+   */
   @Override
   protected void doPut(final HttpServletRequest request,
       final HttpServletResponse response) throws ServletException, IOException {
@@ -484,10 +488,19 @@ public class ImageServlet extends HttpServlet {
                 InputStream stream = request.getInputStream();
                 try {
                   long start = monotonicNow();
+
+                  /**
+                   *  处理上传文件的请求，流对口接收
+                   */
                   MD5Hash downloadImageDigest = TransferFsImage
                       .handleUploadImageRequest(request, txid,
                           nnImage.getStorage(), stream,
                           parsedParams.getFileSize(), getThrottler(conf));
+
+
+                  /**
+                   * md5文件，防止文件损坏或者丢失
+                   */
                   nnImage.saveDigestAndRenameCheckpointImage(nnf, txid,
                       downloadImageDigest);
                   // Metrics non-null only when used inside name node
@@ -497,6 +510,8 @@ public class ImageServlet extends HttpServlet {
                   }
                   // Now that we have a new checkpoint, we might be able to
                   // remove some old ones.
+                  // 清理掉旧的edits log文件和fsimage文件
+                  // 用不到的清理掉就行了
                   nnImage.purgeOldStorage(nnf);
                 } finally {
                   stream.close();

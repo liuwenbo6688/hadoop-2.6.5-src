@@ -520,6 +520,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
   /**
    * Used when this NN is in standby state to read from the shared edit log.
+   * 在 standby namenode 中拉取journal node中edits log的组件
    */
   private EditLogTailer editLogTailer = null;
 

@@ -64,8 +64,11 @@ public class JournalNodeHttpServer {
     httpServer = builder.build();
     httpServer.setAttribute(JN_ATTRIBUTE_KEY, localJournalNode);
     httpServer.setAttribute(JspHelper.CURRENT_CONF, conf);
+
+    // 提供给standby namende读取edits log的servlet
     httpServer.addInternalServlet("getJournal", "/getJournal",
         GetJournalEditServlet.class, true);
+
     httpServer.start();
   }
 

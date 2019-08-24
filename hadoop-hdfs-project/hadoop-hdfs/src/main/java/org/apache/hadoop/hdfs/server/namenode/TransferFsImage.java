@@ -129,6 +129,7 @@ public class TransferFsImage {
     }
 
     MD5Hash advertisedDigest = parseMD5Header(request);
+    //
     MD5Hash hash = receiveFile(fileName, dstFiles, dstStorage, true,
         advertisedSize, advertisedDigest, fileName, stream, throttler);
     LOG.info("Downloaded file " + dstFiles.get(0).getName() + " size "
@@ -216,9 +217,14 @@ public class TransferFsImage {
   public static void uploadImageFromStorage(URL fsName, Configuration conf,
       NNStorage storage, NameNodeFile nnf, long txid, Canceler canceler)
       throws IOException {
-    URL url = new URL(fsName, ImageServlet.PATH_SPEC);
+    // 请求路径："/imagetransfer"
+    // 目标：NameNodeHttpServer -》 ImageServlet
+    URL url = new URL(fsName, ImageServlet.PATH_SPEC/*请求的路径*/);
     long startTime = Time.monotonicNow();
     try {
+      /**
+       *
+       */
       uploadImage(url, conf, storage, nnf, txid, canceler);
     } catch (HttpPutFailedException e) {
       if (e.getResponseCode() == HttpServletResponse.SC_CONFLICT) {
@@ -266,7 +272,7 @@ public class TransferFsImage {
       connection = (HttpURLConnection) connectionFactory.openConnection(
           urlWithParams, UserGroupInformation.isSecurityEnabled());
       // Set the request to PUT
-      connection.setRequestMethod("PUT");
+      connection.setRequestMethod("PUT");//put 请求
       connection.setDoOutput(true);
 
       
@@ -313,6 +319,11 @@ public class TransferFsImage {
     OutputStream output = connection.getOutputStream();
     FileInputStream input = new FileInputStream(imageFile);
     try {
+      /**
+       * 流对口
+       * 一边从自己本地磁盘文件读取fsimage文件，构造一个FileInputStream 输入流
+       * 一边将这个文件输出到针对 active NN的 HttpServer的输出流里面去，通过http上传fsimage文件
+       */
       copyFileToStream(output, imageFile, input,
           ImageServlet.getThrottler(conf), canceler);
     } finally {
@@ -510,6 +521,9 @@ public class TransferFsImage {
       int num = 1;
       byte[] buf = new byte[HdfsConstants.IO_FILE_BUFFER_SIZE];
       while (num > 0) {
+        /**
+         *
+         */
         num = stream.read(buf);
         if (num > 0) {
           received += num;

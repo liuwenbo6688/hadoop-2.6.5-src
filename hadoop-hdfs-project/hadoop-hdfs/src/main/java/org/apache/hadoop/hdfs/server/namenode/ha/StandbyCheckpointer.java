@@ -57,6 +57,16 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
  * periodically waking up to take a checkpoint of the namespace.
  * When it takes a checkpoint, it saves it to its local
  * storage and then uploads it to the remote NameNode.
+ *
+ * 这是一个后台线程，在standby namenode里运行
+ * 周期性的对namespace（元数据）的一次checkpoint操作
+ * 当他执行checkpoint的时候，把自己namespace（内存里的数据）写一份到磁盘文件上去，fsimage文件
+ * 然后将这个fsimage文件，上传一份给active namenode
+ *
+ * active namenode就可以是不是的获取一份最新的fsimage，然后清空之前的一些edits log文件
+ * 他这样就可以每次重启的时候，其实就是只要将一份最新的fsimage和少量的edits log进行合并即可（fsimage 和edits log的合并）
+ *
+ *
  */
 @InterfaceAudience.Private
 public class StandbyCheckpointer {
@@ -66,7 +76,10 @@ public class StandbyCheckpointer {
   private final Configuration conf;
   private final FSNamesystem namesystem;
   private long lastCheckpointTime;
+
+  // 运行线程
   private final CheckpointerThread thread;
+
   private final ThreadFactory uploadThreadFactory;
   private URL activeNNAddress;
   private URL myNNAddress;
@@ -82,8 +95,10 @@ public class StandbyCheckpointer {
       throws IOException {
     this.namesystem = ns;
     this.conf = conf;
-    this.checkpointConf = new CheckpointConf(conf); 
+    this.checkpointConf = new CheckpointConf(conf);
+    //初始化线程，run方法里执行 doWork 方法
     this.thread = new CheckpointerThread();
+
     this.uploadThreadFactory = new ThreadFactoryBuilder().setDaemon(true)
         .setNameFormat("TransferFsImageUpload-%d").build();
 
@@ -179,8 +194,15 @@ public class StandbyCheckpointer {
       } else {
         imageType = NameNodeFile.IMAGE;
       }
+
+      /**
+       * 最核心的一段代码在这
+       * 将内存中的元数据保存到了磁盘文件上
+       *  txid 标志已经合并了的txid
+       */
       img.saveNamespace(namesystem, imageType, canceler);
       txid = img.getStorage().getMostRecentCheckpointTxId();
+
       assert txid == thisCheckpointTxId : "expected to save checkpoint at txid=" +
         thisCheckpointTxId + " but instead saved at txid=" + txid;
 
@@ -192,7 +214,11 @@ public class StandbyCheckpointer {
     } finally {
       namesystem.longReadUnlock();
     }
-    
+
+    /**
+     * 用另外一个线程，单线程异步上传新的fsimage文件到active namenode上去
+     * 用流对口直接通过http写到active namenode上去
+     */
     // Upload the saved checkpoint back to the active
     // Do this in a separate thread to avoid blocking transition to active
     // See HDFS-4816
@@ -201,8 +227,16 @@ public class StandbyCheckpointer {
     Future<Void> upload = executor.submit(new Callable<Void>() {
       @Override
       public Void call() throws IOException {
-        TransferFsImage.uploadImageFromStorage(activeNNAddress, conf,
-            namesystem.getFSImage().getStorage(), imageType, txid, canceler);
+        /**
+         * 上传fsimage 到 active NN
+         */
+        TransferFsImage.uploadImageFromStorage
+                (activeNNAddress,
+                        conf,
+                        namesystem.getFSImage().getStorage(),
+                        imageType,
+                        txid,
+                        canceler);
         return null;
       }
     });
@@ -271,6 +305,9 @@ public class StandbyCheckpointer {
           new PrivilegedAction<Object>() {
           @Override
           public Object run() {
+            /**
+             *
+             */
             doWork();
             return null;
           }
@@ -292,7 +329,10 @@ public class StandbyCheckpointer {
     }
 
     private void doWork() {
+      //运行周期，默认 60秒
+      // 没隔60s执行一次while里的代码而已
       final long checkPeriod = 1000 * checkpointConf.getCheckPeriod();
+
       // Reset checkpoint time so that we don't always checkpoint
       // on startup.
       lastCheckpointTime = monotonicNow();
@@ -300,6 +340,7 @@ public class StandbyCheckpointer {
         boolean needRollbackCheckpoint = namesystem.isNeedRollbackFsImage();
         if (!needRollbackCheckpoint) {
           try {
+            //睡眠一下
             Thread.sleep(checkPeriod);
           } catch (InterruptedException ie) {
           }
@@ -315,23 +356,38 @@ public class StandbyCheckpointer {
           
           final long now = monotonicNow();
           final long uncheckpointed = countUncheckpointedTxns();
+          //上一次执行checkpoint的时间到现在的时间差（秒）
           final long secsSinceLast = (now - lastCheckpointTime) / 1000;
           
           boolean needCheckpoint = needRollbackCheckpoint;
           if (needCheckpoint) {
             LOG.info("Triggering a rollback fsimage for rolling upgrade.");
-          } else if (uncheckpointed >= checkpointConf.getTxnCount()) {
+          }
+          /**
+           * 1、
+           * uncheckpointed(还没合并到fsimage的edits log的数量) >= 1000000
+           * 也就是fsimage文件如果落后edits log已经100万条数据了，那么此时必须执行一次checkpoint操作
+           *
+           */
+          else if (uncheckpointed >= checkpointConf.getTxnCount()) {
             LOG.info("Triggering checkpoint because there have been " + 
                 uncheckpointed + " txns since the last checkpoint, which " +
                 "exceeds the configured threshold " +
                 checkpointConf.getTxnCount());
             needCheckpoint = true;
-          } else if (secsSinceLast >= checkpointConf.getPeriod()) {
+          }
+          /**
+           * 2、
+           * 上一次checkpoint操作时间过了一个小时了，那么也要执行一次checkpoint操作
+           */
+          else if (secsSinceLast >= checkpointConf.getPeriod()) {
             LOG.info("Triggering checkpoint because it has been " +
                 secsSinceLast + " seconds since the last checkpoint, which " +
                 "exceeds the configured interval " + checkpointConf.getPeriod());
             needCheckpoint = true;
           }
+
+          //就上面两个条件，就会执行checkpoint
           
           synchronized (cancelLock) {
             if (now < preventCheckpointsUntil) {
@@ -344,6 +400,9 @@ public class StandbyCheckpointer {
           }
           
           if (needCheckpoint) {
+            /**
+             * 满足条件的情况下，执行 Checkpoint
+             */
             doCheckpoint();
             // reset needRollbackCheckpoint to false only when we finish a ckpt
             // for rollback image

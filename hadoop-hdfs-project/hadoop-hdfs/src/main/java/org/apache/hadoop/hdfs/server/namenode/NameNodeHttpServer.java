@@ -266,6 +266,10 @@ public class NameNodeHttpServer {
         CancelDelegationTokenServlet.class, true);
     httpServer.addInternalServlet("fsck", "/fsck", FsckServlet.class,
         true);
+
+    /**
+     * 接收standby namenode 上传的fsimage文件
+     */
     httpServer.addInternalServlet("imagetransfer", ImageServlet.PATH_SPEC,
         ImageServlet.class, true);
 

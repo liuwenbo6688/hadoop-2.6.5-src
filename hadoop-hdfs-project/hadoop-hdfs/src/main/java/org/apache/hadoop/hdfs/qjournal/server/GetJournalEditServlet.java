@@ -199,7 +199,8 @@ public class GetJournalEditServlet extends HttpServlet {
       if (!checkStorageInfoOrSendError(storage, request, response)) {
         return;
       }
-      
+
+      //
       long segmentTxId = ServletUtil.parseLongParam(request,
           SEGMENT_TXID_PARAM);
 
@@ -220,14 +221,17 @@ public class GetJournalEditServlet extends HttpServlet {
         editFile = elf.getFile();
         ImageServlet.setVerificationHeadersForGet(response, editFile);
         ImageServlet.setFileNameHeaders(response, editFile);
+
+        //
         editFileIn = new FileInputStream(editFile);
       }
-      
-      DataTransferThrottler throttler = ImageServlet.getThrottler(conf);
 
+      // 流对口，还可以限流
+      DataTransferThrottler throttler = ImageServlet.getThrottler(conf);
       // send edits
       TransferFsImage.copyFileToStream(response.getOutputStream(), editFile,
           editFileIn, throttler);
+
 
     } catch (Throwable t) {
       String errMsg = "getedit failed. " + StringUtils.stringifyException(t);

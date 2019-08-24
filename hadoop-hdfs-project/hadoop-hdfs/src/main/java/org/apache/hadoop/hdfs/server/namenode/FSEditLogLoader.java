@@ -136,6 +136,9 @@ public class FSEditLogLoader {
     try {
       long startTime = now();
       FSImage.LOG.info("Start loading edits file " + edits.getName());
+      /**
+       *
+       */
       long numEdits = loadEditRecords(edits, false, expectedStartingTxId,
           startOpt, recovery);
       FSImage.LOG.info("Edits file " + edits.getName() 
@@ -179,11 +182,21 @@ public class FSEditLogLoader {
     long lastInodeId = fsNamesys.getLastInodeId();
     
     try {
+
+      /**
+       * 核心读取 edits log的逻辑在这里
+       * 搞了一个while true的死循环，不断的readOp()，按理说readOp()每次都会读取到一条edits log
+       * 如果读取到一条edits log，就将这条edits log应用到自己的standby本地元数据里去
+       */
       while (true) {
         try {
           FSEditLogOp op;
           try {
+
+            // 第一步：读取到一条edits log
+            // 不断的基于底层的http的InputStream读取数据，包装了很多层，有点复杂
             op = in.readOp();
+
             if (op == null) {
               break;
             }
@@ -227,8 +240,11 @@ public class FSEditLogLoader {
               LOG.trace("op=" + op + ", startOpt=" + startOpt
                   + ", numEdits=" + numEdits + ", totalEdits=" + totalEdits);
             }
+
+            // 第二步： 读取到一条edits log 应用到自己的standby本地元数据里去
             long inodeId = applyEditLogOp(op, fsDir, startOpt,
                 in.getVersion(true), lastInodeId);
+
             if (lastInodeId < inodeId) {
               lastInodeId = inodeId;
             }
@@ -324,7 +340,11 @@ public class FSEditLogLoader {
       LOG.trace("replaying edit log: " + op);
     }
     final boolean toAddRetryCache = fsNamesys.hasRetryCache() && op.hasRpcIds();
-    
+
+    /**
+     * 不同的操作，如何应用到自己本地的元数据中去，针对场景看
+     * 以创建目录为例： OP_MKDIR
+     */
     switch (op.opCode) {
     case OP_ADD: {
       AddCloseOp addCloseOp = (AddCloseOp)op;
@@ -522,10 +542,13 @@ public class FSEditLogLoader {
       }
       break;
     }
+    // 创建目录的操作，如何应用到本地元数据
     case OP_MKDIR: {
       MkdirOp mkdirOp = (MkdirOp)op;
       inodeId = getAndUpdateLastInodeId(mkdirOp.inodeId, logVersion,
           lastInodeId);
+
+      //直接调用FSDirectory的unprotectedMkdir()方法，这个方法之前 active namenode 也是走的这个方法
       fsDir.unprotectedMkdir(inodeId,
           renameReservedPathsOnUpgrade(mkdirOp.path, logVersion),
           mkdirOp.permissions, mkdirOp.aclEntries, mkdirOp.timestamp);

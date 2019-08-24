@@ -826,6 +826,9 @@ public class FSImage implements Closeable {
         LOG.info("Reading " + editIn + " expecting start txid #" +
               (lastAppliedTxId + 1));
         try {
+          /**
+           * 核心的逻辑在这里
+           */
           loader.loadFSEdits(editIn, lastAppliedTxId + 1, startOpt, recovery);
         } finally {
           // Update lastAppliedTxId even in case of error, since some ops may
@@ -1069,10 +1072,14 @@ public class FSImage implements Closeable {
     }
     long imageTxId = getLastAppliedOrWrittenTxId();
     try {
+      /**
+       *
+       */
       saveFSImageInAllDirs(source, nnf, imageTxId, canceler);
       storage.writeAll();
     } finally {
       if (editLogWasOpen) {
+        // 重新打开一个 edits log 文件
         editLog.startLogSegment(imageTxId + 1, true);
         // Take this opportunity to note the current transaction.
         // Even if the namespace save was cancelled, this marker
@@ -1103,7 +1110,12 @@ public class FSImage implements Closeable {
     }
     SaveNamespaceContext ctx = new SaveNamespaceContext(
         source, txid, canceler);
-    
+
+
+    /**
+     * 这一段就是按自己的序列化方式，写磁盘文件了
+     * 还是多线程开启写
+     */
     try {
       List<Thread> saveThreads = new ArrayList<Thread>();
       // save images into current
@@ -1133,6 +1145,7 @@ public class FSImage implements Closeable {
   
       // Since we now have a new checkpoint, we can clean up some
       // old edit logs and checkpoints.
+      // 如果你写了一个新的fsimage文件之后，你就可以清理掉之前的一些edits log文件和 checkpoint文件
       purgeOldStorage(nnf);
     } finally {
       // Notify any threads waiting on the checkpoint to be canceled

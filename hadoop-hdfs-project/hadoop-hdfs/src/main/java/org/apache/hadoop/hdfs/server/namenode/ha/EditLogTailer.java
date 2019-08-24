@@ -55,12 +55,19 @@ import com.google.common.base.Preconditions;
  * EditLogTailer represents a thread which periodically reads from edits
  * journals and applies the transactions contained within to a given
  * FSNamesystem.
+ *
+ * EditLogTailer代表了一个后台线程，这个后台线程会不断的周期性的从journal node集群上拉取edits log 数据流
+ * 接着将edits log应用到自己的FSNamesystem 上去，也就是自己本地的元数据
+ * 在FSNamesystem中被使用
  */
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
 public class EditLogTailer {
   public static final Log LOG = LogFactory.getLog(EditLogTailer.class);
-  
+
+  /**
+   * 这就是内部的线程
+   */
   private final EditLogTailerThread tailerThread;
   
   private final Configuration conf;
@@ -202,11 +209,17 @@ public class EditLogTailer {
     try {
       FSImage image = namesystem.getFSImage();
 
+      //都能看懂了， 最近一个应用到standby namenode 本地元数据上的 edits log的txid
       long lastTxnId = image.getLastAppliedTxId();
       
       if (LOG.isDebugEnabled()) {
         LOG.debug("lastTxnId: " + lastTxnId);
       }
+
+
+      /**
+       * streams的来源？
+       */
       Collection<EditLogInputStream> streams;
       try {
         streams = editLog.selectInputStreams(lastTxnId + 1, 0, null, false);
@@ -218,6 +231,7 @@ public class EditLogTailer {
             "later.", ioe);
         return;
       }
+
       if (LOG.isDebugEnabled()) {
         LOG.debug("edit streams to load from: " + streams.size());
       }
@@ -227,6 +241,9 @@ public class EditLogTailer {
       // disk are ignored.
       long editsLoaded = 0;
       try {
+        /**
+         *
+         */
         editsLoaded = image.loadEdits(streams, namesystem);
       } catch (EditLogInputException elie) {
         editsLoaded = elie.getNumEditsLoaded();
@@ -241,6 +258,7 @@ public class EditLogTailer {
       if (editsLoaded > 0) {
         lastLoadTimestamp = now();
       }
+      // 再次更新一下最近一次加载的 lastLoadedTxnId
       lastLoadedTxnId = image.getLastAppliedTxId();
     } finally {
       namesystem.writeUnlock();
@@ -296,6 +314,9 @@ public class EditLogTailer {
           new PrivilegedAction<Object>() {
           @Override
           public Object run() {
+            /**
+             *
+             */
             doWork();
             return null;
           }
@@ -305,12 +326,13 @@ public class EditLogTailer {
     private void doWork() {
       while (shouldRun) {
         try {
+
           // There's no point in triggering a log roll if the Standby hasn't
           // read any more transactions since the last time a roll was
           // triggered. 
           if (tooLongSinceLastLoad() &&
               lastRollTriggerTxId < lastLoadedTxnId) {
-            triggerActiveLogRoll();
+            triggerActiveLogRoll();// 滚动一个新的 inprogress的edit log文件，固定老的文件而已
           }
           /**
            * Check again in case someone calls {@link EditLogTailer#stop} while
@@ -321,7 +343,12 @@ public class EditLogTailer {
           if (!shouldRun) {
             break;
           }
+
+          /**
+           *
+           */
           doTailEdits();
+
         } catch (EditLogInputException elie) {
           LOG.warn("Error while reading edits from disk. Will try again.", elie);
         } catch (InterruptedException ie) {
@@ -334,6 +361,9 @@ public class EditLogTailer {
         }
 
         try {
+          /**
+           * 按照默认的配置，每个60秒，standby namenode会尝试获取journal node上的edits log
+           */
           Thread.sleep(sleepTimeMs);
         } catch (InterruptedException e) {
           LOG.warn("Edit log tailer interrupted", e);
