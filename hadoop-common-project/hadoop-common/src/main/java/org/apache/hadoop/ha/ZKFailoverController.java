@@ -101,7 +101,11 @@ public abstract class ZKFailoverController {
   private String zkQuorum;
   protected final HAServiceTarget localTarget;
 
+  /**
+   *
+   */
   private HealthMonitor healthMonitor;
+
   private ActiveStandbyElector elector;
   protected ZKFCRpcServer rpcServer;
 
@@ -169,6 +173,7 @@ public abstract class ZKFailoverController {
         @Override
         public Integer run() {
           try {
+            //
             return doRun(args);
           } catch (Exception t) {
             throw new RuntimeException(t);
@@ -232,6 +237,7 @@ public abstract class ZKFailoverController {
     }
 
     initRPC();
+    //初始化 healthMonitor
     initHM();
     startRPC();
     try {
@@ -240,6 +246,10 @@ public abstract class ZKFailoverController {
       rpcServer.stopAndJoin();
       
       elector.quitElection(true);
+
+      /**
+       *
+       */
       healthMonitor.shutdown();
       healthMonitor.join();
     }
@@ -870,6 +880,8 @@ public abstract class ZKFailoverController {
   class ElectorCallbacks implements ActiveStandbyElectorCallback {
     @Override
     public void becomeActive() throws ServiceFailedException {
+      // 如果被选举为active之后，一定会调用这个回调方法
+      // 然后调用 ZKFailoverController 的becomeActive方法，将自己变为active namenode等一系列操作
       ZKFailoverController.this.becomeActive();
     }
 
@@ -907,6 +919,10 @@ public abstract class ZKFailoverController {
     @Override
     public void enteredState(HealthMonitor.State newState) {
       setLastHealthState(newState);
+      /**
+       * 重新检查是否选举
+       * 这边关联到zookeeper，后面再看吧
+       */
       recheckElectability();
     }
   }

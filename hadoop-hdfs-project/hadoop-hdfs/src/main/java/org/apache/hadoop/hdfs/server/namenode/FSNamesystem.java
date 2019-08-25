@@ -746,6 +746,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
     // 实例化 FSNamesystem 对象，将fsImage对象放到FSNamesystem里面
     FSNamesystem namesystem = new FSNamesystem(conf, fsImage, false);
+
     StartupOption startOpt = NameNode.getStartupOption(conf);
     if (startOpt == StartupOption.RECOVER) {
       namesystem.setSafeMode(SafeModeAction.SAFEMODE_ENTER);
@@ -753,12 +754,14 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
     long loadStart = now();
     try {
+
       /**
        * 通过 FSNamesystem.loadFSImage()方法，从磁盘上去加载 fsimage和edits两个文件的数据
        * 然后在内存中合并两个文件的数据
        * 通过FSImage会持有一份在内存中完整的元数据信息
        */
       namesystem.loadFSImage(startOpt);
+
     } catch (IOException ioe) {
       LOG.warn("Encountered exception loading fsimage", ioe);
       fsImage.close();
@@ -1048,8 +1051,13 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     try {
       // We shouldn't be calling saveNamespace if we've come up in standby state.
       MetaRecoveryContext recovery = startOpt.createRecoveryContext();
+
+      /**
+       * 在这个方法里加载了fsimage
+       */
       final boolean staleImage
           = fsImage.recoverTransitionRead(startOpt, this, recovery);
+
       if (RollingUpgradeStartupOption.ROLLBACK.matches(startOpt) ||
           RollingUpgradeStartupOption.DOWNGRADE.matches(startOpt)) {
         rollingUpgradeInfo = null;
@@ -1058,7 +1066,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       LOG.info("Need to save fs image? " + needToSave
           + " (staleImage=" + staleImage + ", haEnabled=" + haEnabled
           + ", isRollingUpgrade=" + isRollingUpgrade() + ")");
+
       if (needToSave) {
+
         fsImage.saveNamespace(this);
       } else {
         updateStorageVersionForRollingUpgrade(fsImage.getLayoutVersion(),
@@ -1068,12 +1078,14 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         prog.beginPhase(Phase.SAVING_CHECKPOINT);
         prog.endPhase(Phase.SAVING_CHECKPOINT);
       }
+
       // This will start a new log segment and write to the seen_txid file, so
       // we shouldn't do it when coming up in standby state
       if (!haEnabled || (haEnabled && startOpt == StartupOption.UPGRADE)
           || (haEnabled && startOpt == StartupOption.UPGRADEONLY)) {
         fsImage.openEditLogForWrite();
       }
+
       success = true;
     } finally {
       if (!success) {

@@ -611,7 +611,8 @@ public class NameNode implements NameNodeStatusMXBean {
 
     /**
      * 2. 重要组件 FSNamesystem
-     *
+     * 初始化元数据
+     * 会将 fsimage 和 edits log的合并，加载进内存
      */
     loadNamesystem(conf);
 
@@ -808,6 +809,12 @@ public class NameNode implements NameNodeStatusMXBean {
       // 初始化的核心代码
       // 初始化 namenode 实例化对象
       initialize(conf);
+
+      /**
+       * 这边是HA的一些状态
+       * 比如说通过zk的选举，有一个namenode进入active状态
+       * 另外一个进入standby状态
+       */
       try {
         haContext.writeLock();
         state.prepareToEnterState(haContext);
@@ -815,6 +822,7 @@ public class NameNode implements NameNodeStatusMXBean {
       } finally {
         haContext.writeUnlock();
       }
+
     } catch (IOException e) {
       this.stop();
       throw e;

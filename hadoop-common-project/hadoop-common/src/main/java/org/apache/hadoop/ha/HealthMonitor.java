@@ -51,6 +51,7 @@ public class HealthMonitor {
 
   private Daemon daemon;
   private long connectRetryInterval;
+  // ha.health-monitor.check-interval.ms  默认1秒
   private long checkIntervalMillis;
   private long sleepAfterDisconnectMillis;
 
@@ -70,6 +71,7 @@ public class HealthMonitor {
 
   /**
    * Listeners for state changes
+   * 监听状态变化的回调
    */
   private List<Callback> callbacks = Collections.synchronizedList(
       new LinkedList<Callback>());
@@ -193,11 +195,16 @@ public class HealthMonitor {
     return targetToMonitor.getProxy(conf, rpcTimeout);
   }
 
+  /**
+   *  进行健康检查
+   */
   private void doHealthChecks() throws InterruptedException {
     while (shouldRun) {
       HAServiceStatus status = null;
       boolean healthy = false;
       try {
+        //每个1秒发送一个请求到active namenode上去，查看他的状态
+        // 加入调用失败，调用catch代码
         status = proxy.getServiceStatus();
         proxy.monitorHealth();
         healthy = true;
@@ -206,11 +213,16 @@ public class HealthMonitor {
             + ": " + e.getMessage());
         enterState(State.SERVICE_UNHEALTHY);
       } catch (Throwable t) {
+        /**
+         *  失败了
+         */
         LOG.warn("Transport-level exception trying to monitor health of " +
             targetToMonitor + ": " + t.getLocalizedMessage());
         RPC.stopProxy(proxy);
         proxy = null;
+        //设置状态"服务没有响应"，直接return掉
         enterState(State.SERVICE_NOT_RESPONDING);
+
         Thread.sleep(sleepAfterDisconnectMillis);
         return;
       }
@@ -222,6 +234,7 @@ public class HealthMonitor {
         enterState(State.SERVICE_HEALTHY);
       }
 
+      //默认1秒
       Thread.sleep(checkIntervalMillis);
     }
   }
@@ -239,6 +252,11 @@ public class HealthMonitor {
       state = newState;
       synchronized (callbacks) {
         for (Callback cb : callbacks) {
+          //
+          /**
+           * 这边调用 HealthCallbacks 的回调方法，重新发起选举
+           * 这是一定的
+           */
           cb.enteredState(newState);
         }
       }
@@ -283,6 +301,7 @@ public class HealthMonitor {
       while (shouldRun) {
         try { 
           loopUntilConnected();
+          // 进行健康检查
           doHealthChecks();
         } catch (InterruptedException ie) {
           Preconditions.checkState(!shouldRun,

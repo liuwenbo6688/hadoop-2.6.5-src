@@ -277,7 +277,10 @@ public class FSImage implements Closeable {
     default:
       // just load the image
     }
-    
+
+    /**
+     *  从目录中选择一个最新的fsimage，然后和edits log 合并
+     */
     return loadFSImage(target, startOpt, recovery);
   }
   
@@ -583,6 +586,7 @@ public class FSImage implements Closeable {
   /**
    * Choose latest image from one of the directories,
    * load it and merge with the edits.
+   * 从目录中选择一个最新的fsimage，然后和edits log 合并
    * 
    * Saving and loading fsimage should never trigger symlink resolution. 
    * The paths that are persisted do not have *intermediate* symlinks 
@@ -623,6 +627,9 @@ public class FSImage implements Closeable {
 
     Iterable<EditLogInputStream> editStreams = null;
 
+    /**
+     *
+     */
     initEditLog(startOpt);
 
     if (NameNodeLayoutVersion.supports(
@@ -641,9 +648,12 @@ public class FSImage implements Closeable {
         // for the rolling upgrade
         toAtLeastTxId = imageFiles.get(0).getCheckpointTxId() + 2;
       }
+
+      // 这块也熟悉
       editStreams = editLog.selectInputStreams(
           imageFiles.get(0).getCheckpointTxId() + 1,
           toAtLeastTxId, recovery, false);
+
     } else {
       editStreams = FSImagePreTransactionalStorageInspector
         .getEditLogStreams(storage);
@@ -660,11 +670,15 @@ public class FSImage implements Closeable {
     if (!editStreams.iterator().hasNext()) {
       LOG.info("No edit log streams selected.");
     }
-    
+
+
     FSImageFile imageFile = null;
     for (int i = 0; i < imageFiles.size(); i++) {
       try {
         imageFile = imageFiles.get(i);
+        /**
+         *  1 .加载 fsimage
+         */
         loadFSImageFile(target, recovery, imageFile, startOpt);
         break;
       } catch (IOException ioe) {
@@ -673,6 +687,8 @@ public class FSImage implements Closeable {
         imageFile = null;
       }
     }
+
+
     // Failed to load any images, error out
     if (imageFile == null) {
       FSEditLog.closeAllStreams(editStreams);
@@ -681,7 +697,13 @@ public class FSImage implements Closeable {
     prog.endPhase(Phase.LOADING_FSIMAGE);
     
     if (!rollingRollback) {
+
+      /**
+       * 2.
+       * loadEdits()方法会加载fsimage之后那些edits log
+       */
       long txnsAdvanced = loadEdits(editStreams, target, startOpt, recovery);
+
       needToSave |= needsResaveBasedOnStaleCheckpoint(imageFile.getFile(),
           txnsAdvanced);
       if (RollingUpgradeStartupOption.DOWNGRADE.matches(startOpt)) {
@@ -729,7 +751,9 @@ public class FSImage implements Closeable {
       // next to the image file
       boolean isRollingRollback = RollingUpgradeStartupOption.ROLLBACK
           .matches(startupOption);
+
       loadFSImage(imageFile.getFile(), target, recovery, isRollingRollback);
+
     } else if (NameNodeLayoutVersion.supports(
         LayoutVersion.Feature.FSIMAGE_CHECKSUM, getLayoutVersion())) {
       // In 0.22, we have the checksum stored in the VERSION file.
@@ -741,11 +765,17 @@ public class FSImage implements Closeable {
             NNStorage.DEPRECATED_MESSAGE_DIGEST_PROPERTY +
             " not set for storage directory " + sdForProperties.getRoot());
       }
+      /**
+       *
+       */
       loadFSImage(imageFile.getFile(), new MD5Hash(md5), target, recovery,
           false);
+
     } else {
+
       // We don't have any record of the md5sum
       loadFSImage(imageFile.getFile(), null, target, recovery, false);
+
     }
   }
 
@@ -778,6 +808,7 @@ public class FSImage implements Closeable {
       editLog.recoverUnclosedStreams();
     } else {
       // This NN is HA and we're not doing an upgrade.
+      //
       editLog.initSharedJournalsForRead();
     }
   }
@@ -929,6 +960,9 @@ public class FSImage implements Closeable {
     target.setBlockPoolId(this.getBlockPoolID());
 
     FSImageFormat.LoaderDelegator loader = FSImageFormat.newLoader(conf, target);
+    /**
+     *  到了底层的加载文件数据的部分了
+     */
     loader.load(curFile, requireSameLayoutVersion);
 
     // Check that the image digest we loaded matches up with what

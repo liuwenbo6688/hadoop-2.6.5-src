@@ -174,10 +174,12 @@ public class DFSZKFailoverController extends ZKFailoverController {
     
     GenericOptionsParser parser = new GenericOptionsParser(
         new HdfsConfiguration(), args);
+    //
     DFSZKFailoverController zkfc = DFSZKFailoverController.create(
         parser.getConfiguration());
     int retCode = 0;
     try {
+      //
       retCode = zkfc.run(parser.getRemainingArgs());
     } catch (Throwable t) {
       LOG.fatal("Got a fatal error, exiting now", t);
