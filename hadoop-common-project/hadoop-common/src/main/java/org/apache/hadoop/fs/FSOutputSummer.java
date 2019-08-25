@@ -50,6 +50,7 @@ abstract public class FSOutputSummer extends OutputStream {
   
   protected FSOutputSummer(DataChecksum sum) {
     this.sum = sum;
+    //
     this.buf = new byte[sum.getBytesPerChecksum() * BUFFER_NUM_CHUNKS];
     this.checksum = new byte[getChecksumSize() * BUFFER_NUM_CHUNKS];
     this.count = 0;
