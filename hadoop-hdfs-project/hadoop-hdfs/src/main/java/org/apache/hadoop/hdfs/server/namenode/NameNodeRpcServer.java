@@ -599,10 +599,17 @@ class NameNodeRpcServer implements NamenodeProtocols {
           + MAX_PATH_LENGTH + " characters, " + MAX_PATH_DEPTH + " levels.");
     }
     namesystem.checkOperation(OperationCategory.WRITE);
+
+      /**
+       * FSNamesystem.startFile 方法
+       * 应该是在这个方法里完成文件目录树中新增一个文件的操作
+       * 包括去写edits log
+       */
     HdfsFileStatus fileStatus = namesystem.startFile(src, new PermissionStatus(
         getRemoteUser().getShortUserName(), null, masked),
         clientName, clientMachine, flag.get(), createParent, replication,
         blockSize, supportedVersions);
+
     metrics.incrFilesCreated();
     metrics.incrCreateFileOps();
     return fileStatus;

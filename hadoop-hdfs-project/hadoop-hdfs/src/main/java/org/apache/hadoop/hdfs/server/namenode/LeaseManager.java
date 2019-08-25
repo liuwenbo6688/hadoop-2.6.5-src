@@ -78,18 +78,25 @@ public class LeaseManager {
   //
   // Used for handling lock-leases
   // Mapping: leaseHolder -> Lease
-  //
+  // key可以排序的 Map
+  // 一个 lease 代表了某个客户端对一个文件拥有的契约
+  // key就是客户端的名称，value就是客户端的lease契约
   private final SortedMap<String, Lease> leases = new TreeMap<String, Lease>();
   // Set of: Lease
+  // 默认根据 Lease 的续约时间进行排序
   private final NavigableSet<Lease> sortedLeases = new TreeSet<Lease>();
 
   // 
   // Map path names to leases. It is protected by the sortedLeases lock.
   // The map stores pathnames in lexicographical order.
-  //
+  // key是文件路径名  value是客户端的契约
   private final SortedMap<String, Lease> sortedLeasesByPath = new TreeMap<String, Lease>();
 
+  /**
+   * 后台线程
+   */
   private Daemon lmthread;
+
   private volatile boolean shouldRunMonitor;
 
   LeaseManager(FSNamesystem fsnamesystem) {this.fsnamesystem = fsnamesystem;}
@@ -105,6 +112,12 @@ public class LeaseManager {
    * This method iterates through all the leases and counts the number of blocks
    * which are not COMPLETE. The FSNamesystem read lock MUST be held before
    * calling this method.
+   *
+   * 获取正在构造中的block
+   * 最早分析namenode启动的时候，会进行一个 safe mode的检查，当时调用了这个方法
+   *
+   * FSNamesystem#getCompleteBlocksTotal()
+   *
    * @return
    */
   synchronized long getNumUnderConstructionBlocks() {
@@ -157,15 +170,21 @@ public class LeaseManager {
    */
   synchronized Lease addLease(String holder, String src) {
     Lease lease = getLease(holder);
+
     if (lease == null) {
+      // 刚开始肯定是空的
+      // 构造一个Lease对象，然后放入 leases 和 sortedLeases 种
       lease = new Lease(holder);
       leases.put(holder, lease);
       sortedLeases.add(lease);
     } else {
       renewLease(lease);
     }
+
+    // 根据文件路径，放入 sortedLeasesByPath 中
     sortedLeasesByPath.put(src, lease);
     lease.paths.add(src);
+
     return lease;
   }
 
@@ -220,6 +239,9 @@ public class LeaseManager {
 
   /**
    * Renew the lease(s) held by the given client
+   * spring cloud eureka 源码中，也有 lease 和 renew 的概念
+   *
+   * 续约
    */
   synchronized void renewLease(String holder) {
     renewLease(getLease(holder));
@@ -249,8 +271,11 @@ public class LeaseManager {
    * expire, all the corresponding locks can be released.
    *************************************************************/
   class Lease implements Comparable<Lease> {
+    // holder  哪个客户端持有这份契约
     private final String holder;
+    // 最近一次进行续约的时间
     private long lastUpdate;
+    // 这个客户端在这份契约里，声明了针对哪些文件的所有权
     private final Collection<String> paths = new TreeSet<String>();
   
     /** Only LeaseManager object can create a lease */
@@ -265,6 +290,10 @@ public class LeaseManager {
 
     /** @return true if the Hard Limit Timer has expired */
     public boolean expiredHardLimit() {
+      /**
+       * 当前时间 - 上次续约时间 > 1 小时
+       * 就算超期了
+       */
       return now() - lastUpdate > hardLimit;
     }
 
@@ -406,6 +435,14 @@ public class LeaseManager {
    * Monitor checks for leases that have expired,
    * and disposes of them.
    ******************************************************/
+  /**
+   * 这是一个后台线程
+   * 这个东西一定会运行起来，在后台不断监控各个lease契约
+   * 如果某个客户端申请持有了一个文件的契约，结果这个客户端莫名其妙的死亡了，然后没有删除这个契约
+   * 那么此时就需要namenode中的 Monitor后台线程
+   * 不断的监控各个lease，如果某个客户端申请了契约之后，长时间范围内没有来续约，就认为他死了
+   * 此时释放这个lease
+   */
   class Monitor implements Runnable {
     final String name = getClass().getSimpleName();
 
@@ -417,9 +454,14 @@ public class LeaseManager {
         try {
           fsnamesystem.writeLockInterruptibly();
           try {
+
+            /**
+             * 检查契约的逻辑
+             */
             if (!fsnamesystem.isInSafeMode()) {
               needSync = checkLeases();
             }
+
           } finally {
             fsnamesystem.writeUnlock();
             // lease reassignments should to be sync'ed.
@@ -427,7 +469,8 @@ public class LeaseManager {
               fsnamesystem.getEditLog().logSync();
             }
           }
-  
+
+          // 每隔2s对所有契约进行一次检查
           Thread.sleep(HdfsServerConstants.NAMENODE_LEASE_RECHECK_INTERVAL);
         } catch(InterruptedException ie) {
           if (LOG.isDebugEnabled()) {
@@ -470,11 +513,18 @@ public class LeaseManager {
     assert fsnamesystem.hasWriteLock();
     Lease leaseToCheck = null;
     try {
+      // sortedLeases 是按照续约时间排序的
+      // 续约时间越老的越靠前， first() 拿到最老的契约
       leaseToCheck = sortedLeases.first();
     } catch(NoSuchElementException e) {}
 
     while(leaseToCheck != null) {
+
+
       if (!leaseToCheck.expiredHardLimit()) {
+        // 如果没有超期，就break掉
+        // 如果最老的一个都没有超过1小时没有续约，那后面的肯定也不会超期的，就不用检查了
+        // 这才是用 续约时间 进行排序的TreeSet结构的原因
         break;
       }
 
@@ -489,8 +539,10 @@ public class LeaseManager {
       leaseToCheck.getPaths().toArray(leasePaths);
       for(String p : leasePaths) {
         try {
+
           boolean completed = fsnamesystem.internalReleaseLease(leaseToCheck, p,
               HdfsServerConstants.NAMENODE_LEASE_HOLDER);
+
           if (LOG.isDebugEnabled()) {
             if (completed) {
               LOG.debug("Lease recovery for " + p + " is complete. File closed.");
@@ -509,9 +561,15 @@ public class LeaseManager {
         }
       }
 
+      // 删除契约，清理掉各种数据结构的中的数据
       for(String p : removing) {
         removeLease(leaseToCheck, p);
       }
+
+      /**
+       * 找到下一个需要删除的契约，higher() 找到第二个比他稍微新一点的契约
+       * 继续while循环
+       */
       leaseToCheck = sortedLeases.higher(leaseToCheck);
     }
 
@@ -533,6 +591,7 @@ public class LeaseManager {
         + "\n}";
   }
 
+  // 一看就是启动后台线程 Monitor
   void startMonitor() {
     Preconditions.checkState(lmthread == null,
         "Lease Monitor already running");

@@ -394,13 +394,16 @@ public class DistributedFileSystem extends FileSystem {
     final ChecksumOpt checksumOpt) throws IOException {
     statistics.incrementWriteOps(1);
     Path absF = fixRelativePart(f);
+
     return new FileSystemLinkResolver<FSDataOutputStream>() {
       @Override
       public FSDataOutputStream doCall(final Path p)
           throws IOException, UnresolvedLinkException {
+        // 这个东西底层，主要还是在调用 DFSClient 的create() 方法，来创建一个针对HDFS的输出流
         final DFSOutputStream dfsos = dfs.create(getPathName(p), permission,
                 cflags, replication, blockSize, progress, bufferSize,
                 checksumOpt);
+        //再把创建的输出流（HdfsDataOutputStream）包裹一下
         return dfs.createWrappedOutputStream(dfsos, statistics);
       }
       @Override
@@ -409,7 +412,9 @@ public class DistributedFileSystem extends FileSystem {
         return fs.create(p, permission, cflags, bufferSize,
             replication, blockSize, progress, checksumOpt);
       }
-    }.resolve(this, absF);
+    }
+    .resolve(this, absF);
+
   }
 
   @Override

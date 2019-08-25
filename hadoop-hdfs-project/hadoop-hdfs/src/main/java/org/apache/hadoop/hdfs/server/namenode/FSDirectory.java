@@ -342,6 +342,7 @@ public class FSDirectory implements Closeable {
       UnresolvedLinkException, SnapshotAccessControlException, AclException {
 
     long modTime = now();
+    // 封装inode file
     INodeFile newNode = newINodeFile(namesystem.allocateNewInodeId(),
         permissions, modTime, modTime, replication, preferredBlockSize);
     newNode.toUnderConstruction(clientName, clientMachine);
@@ -349,7 +350,14 @@ public class FSDirectory implements Closeable {
     boolean added = false;
     writeLock();
     try {
+
+      /**
+       *  比如说上传的文件路径是 : /user/hive/warehouse/access.log
+       *  一定是先找到  /user/hive/warehouse 目录对应的 INodeDirectory
+       *  然后将 access.log 对应的INodeFile 加入到 父目录的 INodeDirectory挂载的children里面去
+       */
       added = addINode(path, newNode);
+
     } finally {
       writeUnlock();
     }
@@ -2115,9 +2123,15 @@ public class FSDirectory implements Closeable {
     updateCount(iip, pos,
         counts.get(Quota.NAMESPACE), counts.get(Quota.DISKSPACE), checkQuota);
     boolean isRename = (child.getParent() != null);
+
+    // 意思就是拿到parent的目录 对应的 INnodeDirectory
     final INodeDirectory parent = inodes[pos-1].asDirectory();
+
     boolean added;
     try {
+      /**
+       *
+       */
       added = parent.addChild(child, true, iip.getLatestSnapshotId());
     } catch (QuotaExceededException e) {
       updateCountNoQuotaCheck(iip, pos,

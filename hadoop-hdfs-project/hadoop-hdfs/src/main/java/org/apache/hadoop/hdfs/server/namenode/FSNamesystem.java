@@ -435,6 +435,8 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   // Block pool ID used by this namenode
   private String blockPoolId;
 
+  // 契约管理器
+  // 在 FSNamesystem初始化的时候，LeaseManager就直接初始化了
   final LeaseManager leaseManager = new LeaseManager(this); 
 
   volatile Daemon smmthread = null;  // SafeModeMonitor thread
@@ -1236,6 +1238,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         // Give them all a fresh start here.
         leaseManager.renewAllLeases();
       }
+      // 启动  leaseManager 的后台线程
       leaseManager.startMonitor();
       startSecretManagerIfNecessary();
 
@@ -2561,6 +2564,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       throws AccessControlException, SafeModeException,
       FileAlreadyExistsException, UnresolvedLinkException,
       FileNotFoundException, ParentNotDirectoryException, IOException {
+
     HdfsFileStatus status = null;
     CacheEntryWithPayload cacheEntry = RetryCache.waitForCompletion(retryCache,
         null);
@@ -2569,9 +2573,13 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
     
     try {
+      /**
+       *
+       */
       status = startFileInt(src, permissions, holder, clientMachine, flag,
           createParent, replication, blockSize, supportedVersions,
           cacheEntry != null);
+
     } catch (AccessControlException e) {
       logAuditEvent(false, "create", src);
       throw e;
@@ -2579,6 +2587,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       RetryCache.setState(cacheEntry, status != null, status);
     }
     return status;
+
   }
 
   private HdfsFileStatus startFileInt(final String srcArg,
@@ -2625,6 +2634,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     boolean overwrite = flag.contains(CreateFlag.OVERWRITE);
     boolean isLazyPersist = flag.contains(CreateFlag.LAZY_PERSIST);
 
+    // 如果是namenode刚启动的时候，你发送上传文件的请求，那么肯定要等待 namenode 加载完fsimage才能继续往下执行
     waitForLoadingFSImage();
 
     /**
@@ -2681,11 +2691,17 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       checkOperation(OperationCategory.WRITE);
       checkNameNodeSafeMode("Cannot create file" + src);
       src = resolvePath(src, pathComponents);
+
+      /**
+       *  跟进去
+       */
       toRemoveBlocks = startFileInternal(pc, src, permissions, holder, 
           clientMachine, create, overwrite, createParent, replication, 
           blockSize, isLazyPersist, suite, protocolVersion, edek, logRetryCache);
+
       stat = dir.getFileInfo(src, false,
           FSDirectory.isReservedRawName(srcArg), true);
+
     } catch (StandbyException se) {
       skipSync = true;
       throw se;
@@ -2694,6 +2710,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       // There might be transactions logged while trying to recover the lease.
       // They need to be sync'ed even when an exception was thrown.
       if (!skipSync) {
+        // ****
         getEditLog().logSync();
         if (toRemoveBlocks != null) {
           removeBlocks(toRemoveBlocks);
@@ -2727,7 +2744,10 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     assert hasWriteLock();
     // Verify that the destination does not exist as a directory already.
     final INodesInPath iip = dir.getINodesInPath4Write(src);
+
+    //
     final INode inode = iip.getLastINode();
+
     if (inode != null && inode.isDirectory()) {
       throw new FileAlreadyExistsException(src +
           " already exists as a directory");
@@ -2776,7 +2796,8 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
               src + " for client " + clientMachine);
         }
       } else {
-        if (overwrite) {
+
+        if (overwrite) { //如果是覆盖写？
           toRemoveBlocks = new BlocksMapUpdateInfo();
           List<INode> toRemoveINodes = new ChunkedArrayList<INode>();
           long ret = dir.delete(src, toRemoveBlocks, toRemoveINodes, now());
@@ -2799,6 +2820,10 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       Path parent = new Path(src).getParent();
       if (parent != null && mkdirsRecursively(parent.toString(),
               permissions, true, now())) {
+        /**
+         * 最核心的一行代码在这，
+         * FSDirectory 文件目录树中添加上
+         */
         newNode = dir.addFile(src, permissions, replication, blockSize,
                               holder, clientMachine);
       }
@@ -2806,6 +2831,10 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       if (newNode == null) {
         throw new IOException("Unable to add " + src +  " to namespace");
       }
+
+      /**
+       *  添加契约（客户端对文件持有的契约）
+       */
       leaseManager.addLease(newNode.getFileUnderConstructionFeature()
           .getClientName(), src);
 
@@ -2818,7 +2847,11 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       setNewINodeStoragePolicy(newNode, iip, isLazyPersist);
 
       // record file record in log, record new generation stamp
+      /**
+       * 写 edits log
+       */
       getEditLog().logOpenFile(src, newNode, overwrite, logRetryEntry);
+
       if (NameNode.stateChangeLog.isDebugEnabled()) {
         NameNode.stateChangeLog.debug("DIR* NameSystem.startFile: added " +
             src + " inode " + newNode.getId() + " " + holder);

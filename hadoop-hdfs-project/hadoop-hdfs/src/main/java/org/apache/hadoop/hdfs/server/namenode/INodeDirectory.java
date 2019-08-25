@@ -535,6 +535,9 @@ public class INodeDirectory extends INodeWithAdditionalFields
       }
       return sf.addChild(this, node, setModTime, latestSnapshotId);
     }
+    /**
+     *
+     */
     addChild(node, low);
     if (setModTime) {
       // update modification time of the parent directory
@@ -561,6 +564,9 @@ public class INodeDirectory extends INodeWithAdditionalFields
       children = new ArrayList<INode>(DEFAULT_FILES_PER_DIRECTORY);
     }
     node.setParent(this);
+    /**
+     * 就是往 children 里添加一下 Inode
+     */
     children.add(-insertionPoint - 1, node);
 
     if (node.getGroupName() == null) {

@@ -250,7 +250,10 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   private final Configuration conf;
   private final Conf dfsClientConf;
+
+  // client和namenode进行通信的rpc通信的代理
   final ClientProtocol namenode;
+
   /* The service used for delegation tokens */
   private Text dtService;
 
@@ -1585,6 +1588,9 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
                              int buffersize,
                              ChecksumOpt checksumOpt)
       throws IOException {
+    /**
+     *
+     */
     return create(src, permission, flag, true,
         replication, blockSize, progress, buffersize, checksumOpt, null);
   }
@@ -1643,7 +1649,8 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
                              int buffersize,
                              ChecksumOpt checksumOpt,
                              InetSocketAddress[] favoredNodes) throws IOException {
-    checkOpen();
+    checkOpen();// 检查当前dfs client是否在运行
+
     if (permission == null) {
       permission = FsPermission.getFileDefault();
     }
@@ -1660,11 +1667,28 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
                          + favoredNodes[i].getPort();
       }
     }
+
+    /**
+     * 比较核心的方法在这
+     * 这里面的逻辑非常复杂了
+     */
     final DFSOutputStream result = DFSOutputStream.newStreamForCreate(this,
-        src, masked, flag, createParent, replication, blockSize, progress,
-        buffersize, dfsClientConf.createChecksum(checksumOpt),
-        favoredNodeStrs);
+            src, masked, flag, createParent, replication, blockSize, progress,
+            buffersize, dfsClientConf.createChecksum(checksumOpt),
+            favoredNodeStrs);
+
+    /**
+     * 开启文件的契约
+     * 这个东西很核心，在hdfs里，同一时间对同一个文件，只能有一个hdfs客户端来写入
+     * 所以说，他需要维护一个全局锁的东西
+     * 也就是说，某个hdfs客户端想要写入一个文件，首先要跟namenode申请一个契约（Lease）
+     * 申请到这个契约之后，在契约有效期内，这个客户端可以独享一个文件的写入
+     * 此时其他客户端也只能等待
+     *
+     * 所以hdfs的理念就是，一次写入 多次读取，这样很少会有多客户端并发写入的情况了
+     */
     beginFileLease(result.getFileId(), result);
+
     return result;
   }
   

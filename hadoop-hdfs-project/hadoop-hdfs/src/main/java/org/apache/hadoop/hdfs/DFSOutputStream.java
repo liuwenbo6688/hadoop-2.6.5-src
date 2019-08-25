@@ -157,9 +157,17 @@ public class DFSOutputStream extends FSOutputSummer
 
   // both dataQueue and ackQueue are protected by dataQueue lock
   private final LinkedList<Packet> dataQueue = new LinkedList<Packet>();
+
   private final LinkedList<Packet> ackQueue = new LinkedList<Packet>();
   private Packet currentPacket = null;
+
+
+  /**
+   * 就是一个 Thread
+   */
   private DataStreamer streamer;
+
+
   private long currentSeqno = 0;
   private long lastQueuedSeqno = -1;
   private long lastAckedSeqno = -1;
@@ -361,7 +369,17 @@ public class DFSOutputStream extends FSOutputSummer
   // it. When all the packets for a block are sent out and acks for each
   // if them are received, the DataStreamer closes the current block.
   //
+
+  /**
+   * DataStreamer 是一个核心线程，专门负责将数据上传到datanode的核心线程
+   * 他是负责一个数据管道（pipeline），将数据（packet）发送给 datanodes
+   * 他会从namenode获取一个blockid以及这些block在哪些datanode上，这样他才知道往哪个datanode上写数据
+   * 他发送的每个packet都有一个序号
+   * 如果一个block里的所有packet数据包都成功发送给了datanode，而且所有的datanode都收到了这个block
+   * DataStreamer就会关闭当前的这个block，说明这个block已经上传成功了
+   */
   class DataStreamer extends Daemon {
+
     private volatile boolean streamerClosed = false;
     private volatile ExtendedBlock block; // its length is number of bytes acked
     private Token<BlockTokenIdentifier> accessToken;
@@ -390,6 +408,7 @@ public class DFSOutputStream extends FSOutputSummer
             return key;
           }
         });
+
     private String[] favoredNodes;
     volatile boolean hasError = false;
     volatile int errorIndex = -1;
@@ -518,6 +537,8 @@ public class DFSOutputStream extends FSOutputSummer
     /*
      * streamer thread is the only thread that opens streams to datanode, 
      * and closes them. Any error recovery is also done by this thread.
+     *  DataStreamer的线程，是唯一一个负责跟 datanode 交互上传数据的一个线程
+     *
      */
     @Override
     public void run() {
@@ -526,6 +547,8 @@ public class DFSOutputStream extends FSOutputSummer
       if (traceSpan != null) {
         traceScope = Trace.continueSpan(traceSpan);
       }
+
+      //
       while (!streamerClosed && dfsClient.clientRunning) {
 
         // if the Responder encountered an error, shutdown Responder
@@ -550,7 +573,10 @@ public class DFSOutputStream extends FSOutputSummer
           synchronized (dataQueue) {
             // wait for a packet to be sent.
             long now = Time.now();
-            while ((!streamerClosed && !hasError && dfsClient.clientRunning 
+
+            // 如果说 dataQueue 这个队列是空的，此时就会进入一个等待，无限while循环
+            // 等待1秒钟，再次判断 dataQueue 是否有数据
+            while ((!streamerClosed && !hasError && dfsClient.clientRunning
                 && dataQueue.size() == 0 && 
                 (stage != BlockConstructionStage.DATA_STREAMING || 
                  stage == BlockConstructionStage.DATA_STREAMING && 
@@ -560,6 +586,7 @@ public class DFSOutputStream extends FSOutputSummer
               timeout = (stage == BlockConstructionStage.DATA_STREAMING)?
                  timeout : 1000;
               try {
+                // 等待 dataQueue 不是空
                 dataQueue.wait(timeout);
               } catch (InterruptedException  e) {
                 DFSClient.LOG.warn("Caught exception ", e);
@@ -567,6 +594,8 @@ public class DFSOutputStream extends FSOutputSummer
               doSleep = false;
               now = Time.now();
             }
+
+
             if (streamerClosed || hasError || !dfsClient.clientRunning) {
               continue;
             }
@@ -1658,7 +1687,9 @@ public class DFSOutputStream extends FSOutputSummer
     this.dfsClient = dfsClient;
     this.src = src;
     this.fileId = stat.getFileId();
+    // 配置的多大MB一个block
     this.blockSize = stat.getBlockSize();
+    // 一个block几个副本
     this.blockReplication = stat.getReplication();
     this.fileEncryptionInfo = stat.getFileEncryptionInfo();
     this.progress = progress;
@@ -1690,15 +1721,33 @@ public class DFSOutputStream extends FSOutputSummer
   private DFSOutputStream(DFSClient dfsClient, String src, HdfsFileStatus stat,
       EnumSet<CreateFlag> flag, Progressable progress,
       DataChecksum checksum, String[] favoredNodes) throws IOException {
+
+    /**
+     * 重载
+     */
     this(dfsClient, src, progress, stat, checksum);
+
     this.shouldSyncBlock = flag.contains(CreateFlag.SYNC_BLOCK);
 
+    /**
+     * 默认的话，
+     * 一个block是128mb，
+     * 每个block在上传的时候，是由多个packet数据包组成的，每个packet数据包的大小是64mb，
+     * 每个packet数据包是由多个chunk组成的，一个chunk可以作为一个数据上传的小碎片
+     * chunk是516字节
+     * 一个packet数据包里还有多个checksum，校验块，每个是512字节
+     */
     computePacketChunkSize(dfsClient.getConf().writePacketSize, bytesPerChecksum);
 
     Span traceSpan = null;
     if (Trace.isTracing()) {
       traceSpan = Trace.startSpan(this.getClass().getSimpleName()).detach();
     }
+
+    /**
+     * 在DFSOutputStream最重要的核心组件是 DataStreamer
+     * 后面上传文件主要是靠这个 DataStreamer
+     */
     streamer = new DataStreamer(stat, traceSpan);
     if (favoredNodes != null && favoredNodes.length != 0) {
       streamer.setFavoredNodes(favoredNodes);
@@ -1714,13 +1763,23 @@ public class DFSOutputStream extends FSOutputSummer
     // Retry the create if we get a RetryStartFileException up to a maximum
     // number of times
     boolean shouldRetry = true;
+    // 这个重要的操作可以重试10次，写死的
     int retryCount = CREATE_RETRY_COUNT;
+
     while (shouldRetry) {
       shouldRetry = false;
       try {
+
+        /**
+         * 调用了namenode的一个rpc接口，create()接口
+         * 如果要在hdfs文件系统里创建一个文件的话，是不是要去更新那个文件目录树，也就是更新那个文件系统的元数据
+         * 文件目录树里，人家namenode就需要在内存的文件目录树里加入一个文件，然后挂在某个目录下面
+         * 这里干的就是这个事情，要去namenode看看具体干了什么事？
+         */
         stat = dfsClient.namenode.create(src, masked, dfsClient.clientName,
             new EnumSetWritable<CreateFlag>(flag), createParent, replication,
             blockSize, SUPPORTED_CRYPTO_VERSIONS);
+
         break;
       } catch (RemoteException re) {
         IOException e = re.unwrapRemoteException(
@@ -1747,10 +1806,15 @@ public class DFSOutputStream extends FSOutputSummer
           throw e;
         }
       }
+
     }
     Preconditions.checkNotNull(stat, "HdfsFileStatus should not be null!");
+
+    //核心的输出流组件
     final DFSOutputStream out = new DFSOutputStream(dfsClient, src, stat,
         flag, progress, checksum, favoredNodes);
+
+    // 启动  DFSOutputStream
     out.start();
     return out;
   }
@@ -2160,6 +2224,7 @@ public class DFSOutputStream extends FSOutputSummer
   }
 
   private synchronized void start() {
+    // 其实就是启动这个 streamer
     streamer.start();
   }
   
