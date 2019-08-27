@@ -295,7 +295,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
     final int ioBufferSize;
     final ChecksumOpt defaultChecksumOpt;
     final int writePacketSize;
-    final int writeMaxPackets;
+    final int writeMaxPackets;// 默认80
     final ByteArrayManager.Conf writeByteArrayManagerConf;
     final int socketTimeout;
     final int socketCacheCapacity;

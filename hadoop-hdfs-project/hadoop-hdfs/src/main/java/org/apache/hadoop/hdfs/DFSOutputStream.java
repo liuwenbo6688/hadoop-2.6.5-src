@@ -224,7 +224,10 @@ public class DFSOutputStream extends FSOutputSummer
     boolean syncBlock; // this packet forces the current block to disk
     int numChunks; // number of chunks currently in packet
     final int maxChunks; // max chunks in packet
+
+    // packet里的数据，是包含了一个checksum对应一个chunk，一次写入
     private byte[] buf;
+
     private boolean lastPacketInBlock; // is this the last packet in block?
 
     /**
@@ -606,6 +609,8 @@ public class DFSOutputStream extends FSOutputSummer
               one = dataQueue.getFirst(); // regular data packet
             }
           }
+
+          // 这里已经拿到了一个 packet 了
           assert one != null;
 
           // get new block from namenode.
@@ -613,8 +618,11 @@ public class DFSOutputStream extends FSOutputSummer
             if(DFSClient.LOG.isDebugEnabled()) {
               DFSClient.LOG.debug("Allocating new block");
             }
+
             setPipeline(nextBlockOutputStream());
+
             initDataStreaming();
+
           } else if (stage == BlockConstructionStage.PIPELINE_SETUP_APPEND) {
             if(DFSClient.LOG.isDebugEnabled()) {
               DFSClient.LOG.debug("Append to block " + block);
@@ -1351,6 +1359,8 @@ public class DFSOutputStream extends FSOutputSummer
      * This happens when a file is created and each time a new block is allocated.
      * Must get block ID and the IDs of the destinations from the namenode.
      * Returns the list of target datanodes.
+     *
+     *
      */
     private LocatedBlock nextBlockOutputStream() throws IOException {
       LocatedBlock lb = null;
@@ -1371,8 +1381,11 @@ public class DFSOutputStream extends FSOutputSummer
             .keySet()
             .toArray(new DatanodeInfo[0]);
         block = oldBlock;
+
+
         lb = locateFollowingBlock(startTime,
             excluded.length > 0 ? excluded : null);
+
         block = lb.getBlock();
         block.setNumBytes(0);
         bytesSent = 0;
@@ -1554,8 +1567,10 @@ public class DFSOutputStream extends FSOutputSummer
         long localstart = Time.now();
         while (true) {
           try {
+            // 哪个客户端 要为哪个文件申请block
             return dfsClient.namenode.addBlock(src, dfsClient.clientName,
                 block, excludedNodes, fileId, favoredNodes);
+
           } catch (RemoteException e) {
             IOException ue = 
               e.unwrapRemoteException(FileNotFoundException.class,
@@ -1859,9 +1874,19 @@ public class DFSOutputStream extends FSOutputSummer
   }
 
   private void computePacketChunkSize(int psize, int csize) {
+
+    // csize 其实是512字节
+    // ChecksumSize 是4个字节
     final int chunkSize = csize + getChecksumSize();
+
+    // 一个packet里面可以有几个chunk
+    // chunkSize = 516 字节
+    // psize  = 65536字节
     chunksPerPacket = Math.max(psize/chunkSize, 1);
+
+    // 64mb
     packetSize = chunkSize*chunksPerPacket;
+
     if (DFSClient.LOG.isDebugEnabled()) {
       DFSClient.LOG.debug("computePacketChunkSize: src=" + src +
                 ", chunkSize=" + chunkSize +
@@ -1878,6 +1903,7 @@ public class DFSOutputStream extends FSOutputSummer
       if (DFSClient.LOG.isDebugEnabled()) {
         DFSClient.LOG.debug("Queued packet " + currentPacket.seqno);
       }
+      //这样就相当于重新开启一个packet了
       currentPacket = null;
       dataQueue.notifyAll();
     }
@@ -1886,24 +1912,29 @@ public class DFSOutputStream extends FSOutputSummer
   private void waitAndQueueCurrentPacket() throws IOException {
     synchronized (dataQueue) {
       try {
-      // If queue is full, then wait till we have enough space
-      while (!closed && dataQueue.size() + ackQueue.size()  > dfsClient.getConf().writeMaxPackets) {
-        try {
-          dataQueue.wait();
-        } catch (InterruptedException e) {
-          // If we get interrupted while waiting to queue data, we still need to get rid
-          // of the current packet. This is because we have an invariant that if
-          // currentPacket gets full, it will get queued before the next writeChunk.
-          //
-          // Rather than wait around for space in the queue, we should instead try to
-          // return to the caller as soon as possible, even though we slightly overrun
-          // the MAX_PACKETS length.
-          Thread.currentThread().interrupt();
-          break;
+        // If queue is full, then wait till we have enough space
+        while (!closed && dataQueue.size() + ackQueue.size() > dfsClient.getConf().writeMaxPackets) {
+          try {
+            // 队列如果是满的情况下，一直阻塞等待
+            dataQueue.wait();
+          } catch (InterruptedException e) {
+            // If we get interrupted while waiting to queue data, we still need to get rid
+            // of the current packet. This is because we have an invariant that if
+            // currentPacket gets full, it will get queued before the next writeChunk.
+            //
+            // Rather than wait around for space in the queue, we should instead try to
+            // return to the caller as soon as possible, even though we slightly overrun
+            // the MAX_PACKETS length.
+            Thread.currentThread().interrupt();
+            break;
+          }
         }
-      }
-      checkClosed();
-      queueCurrentPacket();
+        checkClosed();
+
+        // 在这个地方把packet放到队列中，然后重新开启一个新的packet
+        // 这样可以继续写下一个packet了
+        queueCurrentPacket();
+
       } catch (ClosedChannelException e) {
       }
     }
@@ -1926,9 +1957,11 @@ public class DFSOutputStream extends FSOutputSummer
                             getChecksumSize() + " but found to be " + cklen);
     }
 
+    // 当前的 packet 是空的话，新建一个 packet 出来
     if (currentPacket == null) {
       currentPacket = createPacket(packetSize, chunksPerPacket, 
           bytesCurBlock, currentSeqno++);
+
       if (DFSClient.LOG.isDebugEnabled()) {
         DFSClient.LOG.debug("DFSClient writeChunk allocating new packet seqno=" + 
             currentPacket.seqno +
@@ -1939,15 +1972,23 @@ public class DFSOutputStream extends FSOutputSummer
       }
     }
 
+    // 写入Checksum
     currentPacket.writeChecksum(checksum, ckoff, cklen);
+    // 写入数据
     currentPacket.writeData(b, offset, len);
+    // 更新你已经往这个packet里写了几个chunk了
     currentPacket.numChunks++;
+    // 当前block写入的大小
     bytesCurBlock += len;
 
     // If packet is full, enqueue it for transmission
     //
     if (currentPacket.numChunks == currentPacket.maxChunks ||
         bytesCurBlock == blockSize) {
+      /**
+       * 判断一下，如果说当前这个packet里面的chunk数量已经达到127（最大的chunk数量）之后
+       * 或者当前的block的数据量大小已经等于默认配置的那个block的数据量的大小
+       */
       if (DFSClient.LOG.isDebugEnabled()) {
         DFSClient.LOG.debug("DFSClient writeChunk packet full seqno=" +
             currentPacket.seqno +
@@ -1956,6 +1997,8 @@ public class DFSOutputStream extends FSOutputSummer
             ", blockSize=" + blockSize +
             ", appendChunk=" + appendChunk);
       }
+
+      //在这里，这个方法就会将 当前这个packet放到 dataQueue 中去
       waitAndQueueCurrentPacket();
 
       // If the reopened file did not end at chunk boundary and the above
@@ -1975,6 +2018,8 @@ public class DFSOutputStream extends FSOutputSummer
       // indicate the end of block and reset bytesCurBlock.
       //
       if (bytesCurBlock == blockSize) {
+        // 如果一个block已经写满，写入一个空的packet
+        // 空的packet其实就是作为block的划分
         currentPacket = createPacket(0, 0, bytesCurBlock, currentSeqno++);
         currentPacket.lastPacketInBlock = true;
         currentPacket.syncBlock = shouldSyncBlock;
