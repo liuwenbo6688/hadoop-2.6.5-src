@@ -46,16 +46,23 @@ import com.google.common.collect.Lists;
 public class LocatedBlock {
 
   private final ExtendedBlock b;
+
+  // 这个block在文件中的偏移量
   private long offset;  // offset of the first byte of the block in the file
+
+  // 这个block数据分配到哪些datanode上面
   private final DatanodeInfo[] locs;
+
   /** Storage ID for each replica */
   private final String[] storageIDs;
+
   // Storage type for each replica, if reported.
   private final StorageType[] storageTypes;
   // corrupt flag is true if all of the replicas of a block are corrupt.
   // else false. If block has few corrupt replicas, they are filtered and 
   // their locations are not part of this object
   private boolean corrupt;
+
   private Token<BlockTokenIdentifier> blockToken = new Token<BlockTokenIdentifier>();
   /**
    * List of cached datanode locations

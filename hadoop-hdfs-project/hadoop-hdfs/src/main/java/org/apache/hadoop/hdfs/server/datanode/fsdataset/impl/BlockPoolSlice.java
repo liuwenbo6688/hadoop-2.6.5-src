@@ -64,7 +64,13 @@ class BlockPoolSlice {
 
   private final String bpid;
   private final FsVolumeImpl volume; // volume to which this BlockPool belongs to
+
+  // hdfs如果支持联邦机制的话，会有多个namenode，每个namenode都会有一部分的文件元数据
+  // 每个namenode会对应一个blockpool
+  // 每个datanode上面就会有多个block pool的概念，对应了多个namenode上的block数据
   private final File currentDir; // StorageDirectory/current/bpid/current
+
+
   // directory where finalized replicas are stored
   private final File finalizedDir;
   private final File lazypersistDir;
@@ -263,6 +269,7 @@ class BlockPoolSlice {
    * the block is finalized.
    */
   File createRbwFile(Block b) throws IOException {
+    //
     File f = new File(rbwDir, b.getBlockName());
     return DatanodeUtil.createTmpFile(b, f);
   }

@@ -606,6 +606,7 @@ public class DFSOutputStream extends FSOutputSummer
             if (dataQueue.isEmpty()) {
               one = createHeartbeatPacket();
             } else {
+              // 先进先出
               one = dataQueue.getFirst(); // regular data packet
             }
           }
@@ -619,7 +620,8 @@ public class DFSOutputStream extends FSOutputSummer
               DFSClient.LOG.debug("Allocating new block");
             }
 
-            setPipeline(nextBlockOutputStream());
+            // nextBlockOutputStream() 方法其实就是负责跟namenode去申请一个新的block、建立好数据流的管道
+            setPipeline( nextBlockOutputStream() );
 
             initDataStreaming();
 
@@ -674,6 +676,7 @@ public class DFSOutputStream extends FSOutputSummer
                 " sending packet " + one);
           }
 
+          // 向远程的 datanode 写数据
           // write out data to remote datanode
           try {
             one.writeTo(blockStream);
@@ -688,6 +691,8 @@ public class DFSOutputStream extends FSOutputSummer
             tryMarkPrimaryDatanodeFailed();
             throw e;
           }
+
+
           lastPacket = Time.now();
           
           // update bytesSent
@@ -1357,9 +1362,13 @@ public class DFSOutputStream extends FSOutputSummer
     /**
      * Open a DataOutputStream to a DataNode so that it can be written to.
      * This happens when a file is created and each time a new block is allocated.
+     *
      * Must get block ID and the IDs of the destinations from the namenode.
      * Returns the list of target datanodes.
      *
+     * 这个操作一般会发生在一个文件被创建和一个新的block被分配的时候
+     *
+     * 会给你返回 blockid 和 副本分布在哪些节点上（datanode）
      *
      */
     private LocatedBlock nextBlockOutputStream() throws IOException {
@@ -1383,6 +1392,9 @@ public class DFSOutputStream extends FSOutputSummer
         block = oldBlock;
 
 
+        // 找namenode申请一个新的block就在这里
+        // 到这里已经拿到一个block的id 和 datanodes 列表
+        // excluded 其实就是有故障的列表，告诉namenode，不要在给我分配这些节点了
         lb = locateFollowingBlock(startTime,
             excluded.length > 0 ? excluded : null);
 
@@ -1395,15 +1407,26 @@ public class DFSOutputStream extends FSOutputSummer
 
         //
         // Connect to first DataNode in the list.
-        //
+        // 直接对block的datanodes列表中的第一个节点建立连接，创建输出流
         success = createBlockOutputStream(nodes, storageTypes, 0L, false);
 
         if (!success) {
+          // 如果连接失败的情况下
+          /**
+           * 故障处理机制
+           * 如果这里尝试连接到这个block的第一个datanode失败了，
+           * 此处应该会找namenode，抛弃这个block
+           * 下一轮循环，重试，找namenode重新再申请一个block以及他的datanode列表
+           * 可以猜测，一定会上报这个故障的datanode给namenode
+           * namenode在机架感知算法里，下次给新的block分配datanode的时候，就会避免分配有问题的datanode
+           */
           DFSClient.LOG.info("Abandoning " + block);
           dfsClient.namenode.abandonBlock(block, fileId, src,
               dfsClient.clientName);
           block = null;
           DFSClient.LOG.info("Excluding datanode " + nodes[errorIndex]);
+          // 放到 excludedNodes 列表中去
+          // errorIndex就是哪一个datanode出错了，就是datanodes数组的下标
           excludedNodes.put(nodes[errorIndex], nodes[errorIndex]);
         }
       } while (!success && --count >= 0);
@@ -1443,7 +1466,10 @@ public class DFSOutputStream extends FSOutputSummer
         try {
           assert null == s : "Previous socket unclosed";
           assert null == blockReplyStream : "Previous blockReplyStream unclosed";
+
+          // 针对datanode list中的第一个node ， 也就是 nodes[0]，创建输出管道
           s = createSocketForPipeline(nodes[0], nodes.length, dfsClient);
+
           long writeTimeout = dfsClient.getDatanodeWriteTimeout(nodes.length);
           
           OutputStream unbufOut = NetUtils.getOutputStream(s, writeTimeout);
@@ -1468,12 +1494,14 @@ public class DFSOutputStream extends FSOutputSummer
           blockCopy.setNumBytes(blockSize);
 
           // send the request
+          // 此时发送过去的block其实还是空块
           new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
               dfsClient.clientName, nodes, nodeStorageTypes, null, bcs, 
               nodes.length, block.getNumBytes(), bytesSent, newGS,
               checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile);
   
           // receive ack for connect
+          // 等待获取datanode那边返回建立好连接的ack消息，（其实就是datanode创建本地磁盘文件+管道流）
           BlockOpResponseProto resp = BlockOpResponseProto.parseFrom(
               PBHelper.vintPrefixed(blockReplyStream));
           pipelineStatus = resp.getStatus();
@@ -1489,6 +1517,7 @@ public class DFSOutputStream extends FSOutputSummer
             checkRestart = true;
             throw new IOException("A datanode is restarting.");
           }
+
           if (pipelineStatus != SUCCESS) {
             if (pipelineStatus == Status.ERROR_ACCESS_TOKEN) {
               throw new InvalidBlockTokenException(
@@ -1563,11 +1592,13 @@ public class DFSOutputStream extends FSOutputSummer
         DatanodeInfo[] excludedNodes)  throws IOException {
       int retries = dfsClient.getConf().nBlockWriteLocateFollowingRetry;
       long sleeptime = 400;
+
       while (true) {
         long localstart = Time.now();
         while (true) {
           try {
-            // 哪个客户端 要为哪个文件申请block
+            // 哪个客户端: clientName
+            // 要为哪个文件申请block: src
             return dfsClient.namenode.addBlock(src, dfsClient.clientName,
                 block, excludedNodes, fileId, favoredNodes);
 

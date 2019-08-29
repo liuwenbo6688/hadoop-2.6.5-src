@@ -1052,6 +1052,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       " already exists in state " + replicaInfo.getState() +
       " and thus cannot be created.");
     }
+
     // create a new block
     FsVolumeImpl v;
     while (true) {
@@ -1073,8 +1074,12 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       }
       break;
     }
+
+
     // create an rbw file to hold block in the designated volume
+    // 创建一个本地磁盘文件
     File f = v.createRbwFile(b.getBlockPoolId(), b.getLocalBlock());
+
     ReplicaBeingWritten newReplicaInfo = new ReplicaBeingWritten(b.getBlockId(), 
         b.getGenerationStamp(), v, f.getParentFile(), b.getNumBytes());
     volumeMap.add(b.getBlockPoolId(), newReplicaInfo);

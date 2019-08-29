@@ -65,6 +65,10 @@ import com.google.common.annotations.VisibleForTesting;
 /** A class that receives a block and writes to its own disk, meanwhile
  * may copies it to another site. If a throttler is provided,
  * streaming throttling is also supported.
+ *
+ * 这是一个组件，负责通过socket输入流，从上游节点读取block数据，一个一个的packet数据包
+ * 他每次接收一个packet数据包，都会写入自己本地的磁盘文件
+ * 同时将packet复制一份，发送到pipeline里面的下游datanode去
  **/
 class BlockReceiver implements Closeable {
   public static final Log LOG = DataNode.LOG;
@@ -144,6 +148,8 @@ class BlockReceiver implements Closeable {
       CachingStrategy cachingStrategy,
       final boolean allowLazyPersist) throws IOException {
     try{
+      //一个block对应一个BlockReceiver
+      // 所以对一个block最大的初始化操作，其实就是为这个block初始化一个BlockReceiver组件
       this.block = block;
       this.in = in;
       this.inAddr = inAddr;
@@ -188,12 +194,22 @@ class BlockReceiver implements Closeable {
       if (isDatanode) { //replication or move
         replicaInfo = datanode.data.createTemporary(storageType, block);
       } else {
+
+
         switch (stage) {
+
+          /**
+           * 刚开始的阶段应该是  PIPELINE_SETUP_CREATE
+           */
         case PIPELINE_SETUP_CREATE:
+          // FsDatasetSpi 是专门管理本地磁盘文件的
+          // 创建一个本地的磁盘文件
           replicaInfo = datanode.data.createRbw(storageType, block, allowLazyPersist);
+          //
           datanode.notifyNamenodeReceivingBlock(
               block, replicaInfo.getStorageUuid());
           break;
+
         case PIPELINE_SETUP_STREAMING_RECOVERY:
           replicaInfo = datanode.data.recoverRbw(
               block, newGs, minBytesRcvd, maxBytesRcvd);
