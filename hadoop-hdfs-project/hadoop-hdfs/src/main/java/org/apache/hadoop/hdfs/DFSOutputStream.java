@@ -387,7 +387,11 @@ public class DFSOutputStream extends FSOutputSummer
     private volatile ExtendedBlock block; // its length is number of bytes acked
     private Token<BlockTokenIdentifier> accessToken;
     private DataOutputStream blockStream;
+
+    // 通过 blockReplyStream 就可以从hdfs客户端直接对接的第一个datanode获取输入流
+    // 可以通过整个流读取第一个datanode返回的响应消息
     private DataInputStream blockReplyStream;
+
     private ResponseProcessor response = null;
     private volatile DatanodeInfo[] nodes = null; // list of targets for current block
     private volatile StorageType[] storageTypes = null;
@@ -551,7 +555,7 @@ public class DFSOutputStream extends FSOutputSummer
         traceScope = Trace.continueSpan(traceSpan);
       }
 
-      //
+      //---- while循环开始 ----
       while (!streamerClosed && dfsClient.clientRunning) {
 
         // if the Responder encountered an error, shutdown Responder
@@ -623,6 +627,7 @@ public class DFSOutputStream extends FSOutputSummer
             // nextBlockOutputStream() 方法其实就是负责跟namenode去申请一个新的block、建立好数据流的管道
             setPipeline( nextBlockOutputStream() );
 
+            //
             initDataStreaming();
 
           } else if (stage == BlockConstructionStage.PIPELINE_SETUP_APPEND) {
@@ -642,11 +647,17 @@ public class DFSOutputStream extends FSOutputSummer
                 " Aborting file " + src);
           }
 
+
           if (one.lastPacketInBlock) {
+            //如果是当前block发送的最后一个packet的话，那么就会在这里陷入一个无限的循环和等待，等待之前发送的block
+            //里面的packet全部被处理掉，都上传好
             // wait for all data packets have been successfully acked
             synchronized (dataQueue) {
-              while (!streamerClosed && !hasError && 
-                  ackQueue.size() != 0 && dfsClient.clientRunning) {
+              while (!streamerClosed
+                      && !hasError
+                      // ackQueue == 0 才意味着都确认成功了
+                      && ackQueue.size() != 0
+                      && dfsClient.clientRunning) {
                 try {
                   // wait for acks to arrive from datanodes
                   dataQueue.wait(1000);
@@ -665,6 +676,7 @@ public class DFSOutputStream extends FSOutputSummer
           synchronized (dataQueue) {
             // move packet from dataQueue to ackQueue
             if (!one.isHeartbeatPacket()) {
+              //锁住dataQueue，然后从dataQueue队列中移除第一个，并加入到 ackQueue 中
               dataQueue.removeFirst();
               ackQueue.addLast(one);
               dataQueue.notifyAll();
@@ -679,6 +691,7 @@ public class DFSOutputStream extends FSOutputSummer
           // 向远程的 datanode 写数据
           // write out data to remote datanode
           try {
+            // 直接将packet的数据刷到 datanode 上去
             one.writeTo(blockStream);
             blockStream.flush();   
           } catch (IOException e) {
@@ -718,6 +731,7 @@ public class DFSOutputStream extends FSOutputSummer
               continue;
             }
 
+            // 结束这个block，包括关闭各种流 + 设置 stage 变量
             endBlock();
           }
           if (progress != null) { progress.progress(); }
@@ -743,6 +757,10 @@ public class DFSOutputStream extends FSOutputSummer
           }
         }
       }
+      //-----while循环结束-----
+
+
+
       if (traceScope != null) {
         traceScope.close();
       }
@@ -1480,6 +1498,8 @@ public class DFSOutputStream extends FSOutputSummer
           unbufIn = saslStreams.in;
           out = new DataOutputStream(new BufferedOutputStream(unbufOut,
               HdfsConstants.SMALL_BUFFER_SIZE));
+          // 通过 blockReplyStream 就可以从hdfs客户端直接对接的第一个datanode获取输入流
+          // 可以通过整个流读取第一个datanode返回的响应消息
           blockReplyStream = new DataInputStream(unbufIn);
   
           //

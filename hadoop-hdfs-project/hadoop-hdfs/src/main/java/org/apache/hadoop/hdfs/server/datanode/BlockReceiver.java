@@ -270,8 +270,11 @@ class BlockReceiver implements Closeable {
         LOG.warn("Could not get file descriptor for outputstream of class " +
             out.getClass());
       }
+
+      // 校验和文件本地输出流
       this.checksumOut = new DataOutputStream(new BufferedOutputStream(
           streams.getChecksumOut(), HdfsConstants.SMALL_BUFFER_SIZE));
+
       // write data chunk header if creating a new replica
       if (isCreate) {
         BlockMetadataHeader.writeHeader(checksumOut, diskChecksum);
@@ -503,12 +506,16 @@ class BlockReceiver implements Closeable {
     return (mirrorOut == null || isDatanode || needsChecksumTranslation);
   }
 
+
+
+  // ---
   /** 
    * Receives and processes a packet. It can contain many chunks.
    * returns the number of data bytes that the packet has.
    */
   private int receivePacket() throws IOException {
     // read the next packet
+    // 通过输入流，读取一个packet出来
     packetReceiver.receiveNextPacket(in);
 
     PacketHeader header = packetReceiver.getHeader();
@@ -566,6 +573,11 @@ class BlockReceiver implements Closeable {
         long begin = Time.monotonicNow();
         // For testing. Normally no-op.
         DataNodeFaultInjector.get().stopSendingPacketDownstream();
+
+        /**
+         *   把packet写到下游的datanode
+         *   mirrorOut就是下游 datanode 的输出流
+         */
         packetReceiver.mirrorPacketTo(mirrorOut);
         mirrorOut.flush();
         long now = Time.monotonicNow();
@@ -601,6 +613,9 @@ class BlockReceiver implements Closeable {
       }
 
       if (checksumReceivedLen > 0 && shouldVerifyChecksum()) {
+        /**
+         * checksum校验传输正确性
+         */
         try {
           verifyChunks(dataBuf, checksumBuf);
         } catch (IOException ioe) {
@@ -701,7 +716,13 @@ class BlockReceiver implements Closeable {
           
           // Write data to disk.
           long begin = Time.monotonicNow();
+
+          /**
+           *
+           *
+           */
           out.write(dataBuf.array(), startByteToDisk, numBytesToDisk);
+
           long duration = Time.monotonicNow() - begin;
           if (duration > datanodeSlowLogThresholdMs) {
             LOG.warn("Slow BlockReceiver write data to disk cost:" + duration
@@ -736,7 +757,10 @@ class BlockReceiver implements Closeable {
               byte[] buf = FSOutputSummer.convertToByteStream(partialCrc,
                   checksumSize);
               crcBytes = copyLastChunkChecksum(buf, checksumSize, buf.length);
+
+              // 写入本地磁盘对应的校验和文件
               checksumOut.write(buf);
+
               if(LOG.isDebugEnabled()) {
                 LOG.debug("Writing out partial crc for data len " + len +
                     ", skip=" + skip);
@@ -815,6 +839,11 @@ class BlockReceiver implements Closeable {
     
     return lastPacketInBlock?-1:len;
   }
+  //-----------
+
+
+
+
 
   private static byte[] copyLastChunkChecksum(byte[] array, int size, int end) {
     return Arrays.copyOfRange(array, end - size, end);
@@ -899,11 +928,15 @@ class BlockReceiver implements Closeable {
 
     try {
       if (isClient && !isTransfer) {
+
+        // 在这又起了一个线程，
         responder = new Daemon(datanode.threadGroup, 
             new PacketResponder(replyOut, mirrIn, downstreams));
         responder.start(); // start thread to processes responses
       }
 
+
+      // 核心接收packet的逻辑
       while (receivePacket() >= 0) { /* Receive until the last packet */ }
 
       // wait for all outstanding packet responses. And then
@@ -1276,6 +1309,7 @@ class BlockReceiver implements Closeable {
     public void run() {
       boolean lastPacketInBlock = false;
       final long startTime = ClientTraceLog.isInfoEnabled() ? System.nanoTime() : 0;
+
       while (isRunning() && !lastPacketInBlock) {
         long totalAckTimeNanos = 0;
         boolean isInterrupted = false;
@@ -1286,7 +1320,12 @@ class BlockReceiver implements Closeable {
           long seqno = PipelineAck.UNKOWN_SEQNO;
           long ackRecvNanoTime = 0;
           try {
+
             if (type != PacketResponderType.LAST_IN_PIPELINE && !mirrorError) {
+
+              /**
+               *  从下游读取那个packet的ack的消息
+               */
               // read an ack from downstream datanode
               ack.readFields(downstreamIn);
               ackRecvNanoTime = System.nanoTime();
@@ -1383,9 +1422,13 @@ class BlockReceiver implements Closeable {
             finalizeBlock(startTime);
           }
 
+          /**
+           * 向自己的上游datanode发送ack消息
+           */
           sendAckUpstream(ack, expected, totalAckTimeNanos,
               (pkt != null ? pkt.offsetInBlock : 0), 
               (pkt != null ? pkt.ackStatus : Status.SUCCESS));
+
           if (pkt != null) {
             // remove the packet from the ack queue
             removeAckHead();

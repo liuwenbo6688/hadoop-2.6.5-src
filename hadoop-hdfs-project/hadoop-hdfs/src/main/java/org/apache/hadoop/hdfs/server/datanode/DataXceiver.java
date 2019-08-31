@@ -781,14 +781,21 @@ class DataXceiver extends Receiver implements Runnable {
       // receive the block and mirror to the next target
       if (blockReceiver != null) {
         String mirrorAddr = (mirrorSock == null) ? null : mirrorNode;
+
+        /**
+         *  调用  blockReceiver的receiveBlock方法一直卡在这，接收block的数据，直到所有的packet都接收完成
+         */
         blockReceiver.receiveBlock(mirrorOut, mirrorIn, replyOut,
             mirrorAddr, null, targets, false);
+
 
         // send close-ack for transfer-RBW/Finalized 
         if (isTransfer) {
           if (LOG.isTraceEnabled()) {
             LOG.trace("TRANSFER: send close-ack");
           }
+          // 如果判断读取完了一个block所有的packet之后
+          // hdfs客户端最后一定会发送一个空的packet过来，标识说这个block的packet都传输完毕了
           writeResponse(SUCCESS, null, replyOut);
         }
       }
@@ -816,6 +823,7 @@ class DataXceiver extends Receiver implements Runnable {
       throw ioe;
     } finally {
       // close all opened streams
+      // 关闭各种流
       IOUtils.closeStream(mirrorOut);
       IOUtils.closeStream(mirrorIn);
       IOUtils.closeStream(replyOut);
