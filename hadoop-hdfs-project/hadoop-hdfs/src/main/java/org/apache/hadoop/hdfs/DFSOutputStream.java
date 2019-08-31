@@ -1932,10 +1932,10 @@ public class DFSOutputStream extends FSOutputSummer
 
     // 一个packet里面可以有几个chunk
     // chunkSize = 516 字节
-    // psize  = 65536字节
+    // psize  = 65536字节 = 64kb
     chunksPerPacket = Math.max(psize/chunkSize, 1);
 
-    // 64mb
+    // 64kb
     packetSize = chunkSize*chunksPerPacket;
 
     if (DFSClient.LOG.isDebugEnabled()) {
