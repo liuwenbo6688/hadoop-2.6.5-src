@@ -3073,7 +3073,8 @@ public class BlockManager {
     assert toUC.size() + toAdd.size() + toInvalidate.size() + toCorrupt.size() <= 1
       : "The block should be only in one of the lists.";
 
-    for (StatefulBlockInfo b : toUC) { 
+    for (StatefulBlockInfo b : toUC) {
+      // block under construction，就是还停留在传输过程中，一个block对应了多个packet
       addStoredBlockUnderConstruction(b, storageInfo);
     }
     long numBlocksLogged = 0;
@@ -3130,6 +3131,9 @@ public class BlockManager {
       storageInfo = node.updateStorage(srdb.getStorage());
     }
 
+    /**
+     *
+     */
     for (ReceivedDeletedBlockInfo rdbi : srdb.getBlocks()) {
       switch (rdbi.getStatus()) {
       case DELETED_BLOCK:

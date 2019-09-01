@@ -1417,7 +1417,9 @@ class BlockReceiver implements Closeable {
             continue;
           }
 
+
           if (lastPacketInBlock) {
+            // 收到的是 block 是最后一个packet，空包，就认为是block接收结束，收尾的工作在这进行
             // Finalize the block and close the block file
             finalizeBlock(startTime);
           }

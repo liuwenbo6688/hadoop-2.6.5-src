@@ -2225,7 +2225,9 @@ public class DataNode extends ReconfigurableBase
   void closeBlock(ExtendedBlock block, String delHint, String storageUuid) {
     metrics.incrBlocksWritten();
     BPOfferService bpos = blockPoolManager.get(block.getBlockPoolId());
+
     if(bpos != null) {
+      // 通知 namenode 已经接收了一个block
       bpos.notifyNamenodeReceivedBlock(block, delHint, storageUuid);
     } else {
       LOG.warn("Cannot find BPOfferService for reporting block received for bpid="

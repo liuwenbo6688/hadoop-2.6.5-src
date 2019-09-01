@@ -1258,6 +1258,9 @@ class NameNodeRpcServer implements NamenodeProtocols {
           +" blocks.");
     }
     for(StorageReceivedDeletedBlocks r : receivedAndDeletedBlocks) {
+        /**
+         *
+         */
       namesystem.processIncrementalBlockReport(nodeReg, r);
     }
   }

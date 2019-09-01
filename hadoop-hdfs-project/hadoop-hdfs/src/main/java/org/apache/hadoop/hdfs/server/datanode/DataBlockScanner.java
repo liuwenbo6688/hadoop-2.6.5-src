@@ -41,6 +41,8 @@ import com.google.common.annotations.VisibleForTesting;
  * block pool a {@link BlockPoolSliceScanner} is created which runs in a separate
  * thread to scan the blocks for that block pool. When a {@link BPOfferService}
  * becomes alive or dies, blockPoolScannerMap in this class is updated.
+ *
+ *
  */
 @InterfaceAudience.Private
 public class DataBlockScanner implements Runnable {
@@ -71,6 +73,10 @@ public class DataBlockScanner implements Runnable {
   public void run() {
     String currentBpId = "";
     boolean firstRun = true;
+
+    /**
+     * 专门去扫描block pool下的block破损情况
+     */
     while (datanode.shouldRun && !Thread.interrupted()) {
       //Sleep everytime except in the first iteration.
       if (!firstRun) {
@@ -98,8 +104,10 @@ public class DataBlockScanner implements Runnable {
         removeBlockPool(currentBpId);
         continue;
       }
+
       bpScanner.scanBlockPoolSlice();
     }
+
 
     // Call shutdown for each allocated BlockPoolSliceScanner.
     for (BlockPoolSliceScanner bpss: blockPoolScannerMap.values()) {
