@@ -521,6 +521,9 @@ class DataXceiver extends Receiver implements Runnable {
 
     try {
       try {
+        /**
+         *
+         */
         blockSender = new BlockSender(block, blockOffset, length,
             true, false, sendChecksum, datanode, clientTraceFmt,
             cachingStrategy);
@@ -534,7 +537,12 @@ class DataXceiver extends Receiver implements Runnable {
       // send op status
       writeSuccessWithChecksumInfo(blockSender, new DataOutputStream(getOutputStream()));
 
+
+      /**
+       *
+       */
       long read = blockSender.sendBlock(out, baseStream, null); // send data
+
 
       if (blockSender.didSendEntireByteRange()) {
         // If we sent the entire range, then we should expect the client

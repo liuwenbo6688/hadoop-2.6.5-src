@@ -351,6 +351,10 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
     Preconditions.checkState(!DFSInputStream.tcpReadsDisabledForTesting,
         "TCP reads were disabled for testing, but we failed to " +
         "do a non-TCP read.");
+
+    /**
+     * 从tcp建立远程的block读取组件
+     */
     return getRemoteBlockReaderFromTcp();
   }
 
@@ -694,6 +698,7 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
         if (curPeer == null) break;
         if (curPeer.fromCache) remainingCacheTries--;
         peer = curPeer.peer;
+        //
         blockReader = getRemoteBlockReader(peer);
         return blockReader;
       } catch (IOException ioe) {
@@ -810,12 +815,14 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
 
   @SuppressWarnings("deprecation")
   private BlockReader getRemoteBlockReader(Peer peer) throws IOException {
+    // useLegacyBlockReader 默认是 false
     if (conf.useLegacyBlockReader) {
       return RemoteBlockReader.newBlockReader(fileName,
           block, token, startOffset, length, conf.ioBufferSize,
           verifyChecksum, clientName, peer, datanode,
           clientContext.getPeerCache(), cachingStrategy);
     } else {
+      //
       return RemoteBlockReader2.newBlockReader(
           fileName, block, token, startOffset, length,
           verifyChecksum, clientName, peer, datanode,

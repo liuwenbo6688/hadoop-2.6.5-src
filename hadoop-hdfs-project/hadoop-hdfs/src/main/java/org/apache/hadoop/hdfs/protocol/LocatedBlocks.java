@@ -32,7 +32,10 @@ import org.apache.hadoop.fs.FileEncryptionInfo;
 @InterfaceStability.Evolving
 public class LocatedBlocks {
   private final long fileLength;
+
+  //
   private final List<LocatedBlock> blocks; // array of blocks with prioritized locations
+
   private final boolean underConstruction;
   private LocatedBlock lastLocatedBlock = null;
   private boolean isLastBlockComplete = false;

@@ -1840,8 +1840,13 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   LocatedBlocks getBlockLocations(String clientMachine, String src,
       long offset, long length) throws AccessControlException,
       FileNotFoundException, UnresolvedLinkException, IOException {
+
+    /**
+     *  获取到一个文件对应的所有block
+     */
     LocatedBlocks blocks = getBlockLocations(src, offset, length, true, true,
         true);
+
     if (blocks != null) {
       blockManager.getDatanodeManager().sortLocatedBlocks(clientMachine,
           blocks.getLocatedBlocks());
@@ -1856,6 +1861,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
             lastBlockList);
       }
     }
+
     return blocks;
   }
 
@@ -1888,8 +1894,13 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       throw new HadoopIllegalArgumentException(
           "Negative length is not supported. File: " + src);
     }
+
+    /**
+     *
+     */
     final LocatedBlocks ret = getBlockLocationsUpdateTimes(src,
-        offset, length, doAccessTime, needBlockToken);  
+        offset, length, doAccessTime, needBlockToken);
+
     logAuditEvent(true, "open", src);
     if (checkSafeMode && isInSafeMode()) {
       for (LocatedBlock b : ret.getLocatedBlocks()) {
@@ -1945,10 +1956,14 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
           doAccessTime = false;
         }
 
+        /**
+         *
+         */
         final INodesInPath iip = dir.getINodesInPath(src, true);
         final INode[] inodes = iip.getINodes();
         final INodeFile inode = INodeFile.valueOf(
             inodes[inodes.length - 1], src);
+
         if (isPermissionEnabled) {
           checkUnreadableBySuperuser(pc, inode, iip.getPathSnapshotId());
         }
@@ -1984,9 +1999,13 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
           null : dir.getFileEncryptionInfo(inode, iip.getPathSnapshotId(),
               iip);
 
+        /**
+         *
+         */
         final LocatedBlocks blocks =
           blockManager.createLocatedBlocks(inode.getBlocks(), fileSize,
             isUc, offset, length, needBlockToken, iip.isSnapshot(), feInfo);
+
         // Set caching information for the located blocks.
         for (LocatedBlock lb: blocks.getLocatedBlocks()) {
           cacheManager.setCachedLocations(lb);
