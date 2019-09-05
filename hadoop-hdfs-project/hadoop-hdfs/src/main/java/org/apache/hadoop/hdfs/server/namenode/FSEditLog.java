@@ -140,6 +140,7 @@ public class FSEditLog implements LogsPurgeable {
 
   /**
    * State machine for edit log.
+   * edits log 的状态机
    * 
    * In a non-HA setup:
    * 
@@ -148,6 +149,12 @@ public class FSEditLog implements LogsPurgeable {
    * be written. In the middle of a roll, or while saving the namespace, it
    * briefly enters the BETWEEN_LOG_SEGMENTS state, indicating that the previous
    * segment has been closed, but the new one has not yet been opened.
+   * 非HA：
+   *
+   * 一开始是 UNINITIALIZED ，处在构建初始化阶段
+   * 一旦初始化结束，就在 IN_SEGMENT 状态，说明edits可以被写入了
+   * 在中间日志文件滚动阶段或者保存namespace的时候，暂时变为 BETWEEN_LOG_SEGMENTS ，说明前一个文件段已经关闭，新的文件段还没有打开
+   *
    * 
    * In an HA setup:
    * 
@@ -158,6 +165,14 @@ public class FSEditLog implements LogsPurgeable {
    * started up, and then will move to IN_SEGMENT so it can begin writing to the
    * log. The log states will then revert to behaving as they do in a non-HA
    * setup.
+   *
+   * HA
+   * 一开始是 UNINITIALIZED ，处在构建阶段
+   * 初始化后，standby NN 会一直处在 OPEN_FOR_READING
+   * 一旦切换为active状态，日志会被关闭然后转为BETWEEN_LOG_SEGMENTS，等到NN完全启动后，变为 IN_SEGMENT（此时 可以写入edits log了）
+   *
+   * 此后的状态流转就像非HA下一样了
+   *
    */
   private enum State {
     UNINITIALIZED,
