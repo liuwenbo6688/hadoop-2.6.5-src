@@ -232,14 +232,22 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     this.src = src;
     this.cachingStrategy =
         dfsClient.getDefaultReadCachingStrategy();
+    /**
+     *
+     */
     openInfo();
   }
 
   /**
    * Grab the open-file info from namenode
+   *
    */
   synchronized void openInfo() throws IOException, UnresolvedLinkException {
+    /**
+     *
+     */
     lastBlockBeingWrittenLength = fetchLocatedBlocksAndGetLastBlockLength();
+
     int retriesForLastBlockLength = dfsClient.getConf().retryTimesForGetLastBlockLength;
     while (retriesForLastBlockLength > 0) {
       // Getting last block length as -1 is a special case. When cluster
@@ -272,7 +280,12 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
   }
 
   private long fetchLocatedBlocksAndGetLastBlockLength() throws IOException {
+
+    /**
+     *
+     */
     final LocatedBlocks newInfo = dfsClient.getLocatedBlocks(src, 0);
+
     if (DFSClient.LOG.isDebugEnabled()) {
       DFSClient.LOG.debug("newInfo = " + newInfo);
     }
@@ -479,7 +492,10 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     // update current position
     if (updatePosition) {
       pos = offset;
+
+      // 更新这个block的结束位置
       blockEnd = blk.getStartOffset() + blk.getBlockSize() - 1;
+
       currentLocatedBlock = blk;
     }
     return blk;
@@ -602,18 +618,29 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
       //
       // Compute desired block
       //
+
+      /**
+       *
+       */
       LocatedBlock targetBlock = getBlockAt(target, true);
+
       assert (target==pos) : "Wrong postion " + pos + " expect " + target;
       long offsetIntoBlock = target - targetBlock.getStartOffset();
 
+      //
       DNAddrPair retval = chooseDataNode(targetBlock, null);
+
       chosenNode = retval.info;
       InetSocketAddress targetAddr = retval.addr;
       StorageType storageType = retval.storageType;
 
       try {
+
         ExtendedBlock blk = targetBlock.getBlock();
         Token<BlockTokenIdentifier> accessToken = targetBlock.getBlockToken();
+
+        // 设计模式-构造器
+        // 构造出来 blockReader 这个组件
         blockReader = new BlockReaderFactory(dfsClient.getConf()).
             setInetSocketAddress(targetAddr).
             setRemotePeerFactory(dfsClient).
@@ -632,6 +659,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
             setUserGroupInformation(dfsClient.ugi).
             setConfiguration(dfsClient.getConfiguration()).
             build();
+
         if(connectFailedOnce) {
           DFSClient.LOG.info("Successfully connected to " + targetAddr +
                              " for " + blk);
@@ -787,6 +815,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     while (true) {
       // retry as many times as seekToNewSource allows.
       try {
+        // 不断的用 blockReader 在读取数据
         return reader.doRead(blockReader, off, len, readStatistics);
       } catch ( ChecksumException ce ) {
         DFSClient.LOG.warn("Found Checksum error for "
@@ -838,6 +867,9 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
           // currentNode can be left as null if previous read had a checksum
           // error on the same block. See HDFS-3067
           if (pos > blockEnd || currentNode == null) {
+            /**
+             *   如果说你的pos的位置超过了一个block应该有的大小之后，此时就会重新定位下一个block，开始连接那个block去读取
+             */
             currentNode = blockSeekTo(pos);
           }
           int realLen = (int) Math.min(len, (blockEnd - pos + 1L));
@@ -845,6 +877,10 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
             realLen = (int) Math.min(realLen,
                 locatedBlocks.getFileLength() - pos);
           }
+
+          /**
+           *  这个方法在读取数据
+           */
           int result = readBuffer(strategy, off, realLen, corruptedBlockMap);
           
           if (result >= 0) {
@@ -918,6 +954,9 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
       Collection<DatanodeInfo> ignoredNodes) throws IOException {
     while (true) {
       try {
+        /**
+         *
+         */
         return getBestNodeDNAddrPair(block, ignoredNodes);
       } catch (IOException ie) {
         String errMsg = getBestNodeDNAddrPairErrorString(block.getLocations(),

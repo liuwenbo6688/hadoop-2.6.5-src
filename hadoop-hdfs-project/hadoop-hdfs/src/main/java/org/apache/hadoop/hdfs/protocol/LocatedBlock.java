@@ -34,22 +34,35 @@ import com.google.common.collect.Lists;
  * and other block metadata (E.g. the file offset associated with this
  * block, whether it is corrupt, a location is cached in memory,
  * security token, etc).
+ *
+ * 这个 LocatedBlock 就代表了一个block，他有多个副本，每个副本在一个datanode上面
+ * 同时这里也包含了block的其他元数据
+ * 比如说，一个大文件拆成了多个block，这个block就代表了这个大文件的哪一部分内容呢？
+ * 还有比如说，这个block的数据是否破损了
+ *
  */
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
 public class LocatedBlock {
 
   private final ExtendedBlock b;
+
+  // 这个block在文件中的偏移量
   private long offset;  // offset of the first byte of the block in the file
+
+  // 这个block数据分配到哪些datanode上面
   private final DatanodeInfo[] locs;
+
   /** Storage ID for each replica */
   private final String[] storageIDs;
+
   // Storage type for each replica, if reported.
   private final StorageType[] storageTypes;
   // corrupt flag is true if all of the replicas of a block are corrupt.
   // else false. If block has few corrupt replicas, they are filtered and 
   // their locations are not part of this object
   private boolean corrupt;
+
   private Token<BlockTokenIdentifier> blockToken = new Token<BlockTokenIdentifier>();
   /**
    * List of cached datanode locations

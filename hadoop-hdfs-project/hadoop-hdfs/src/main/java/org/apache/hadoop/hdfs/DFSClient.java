@@ -295,7 +295,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
     final int ioBufferSize;
     final ChecksumOpt defaultChecksumOpt;
     final int writePacketSize;
-    final int writeMaxPackets;
+    final int writeMaxPackets;// 默认80
     final ByteArrayManager.Conf writeByteArrayManagerConf;
     final int socketTimeout;
     final int socketCacheCapacity;
@@ -1678,7 +1678,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
             favoredNodeStrs);
 
     /**
-     * 开启文件的契约
+     *
      * 这个东西很核心，在hdfs里，同一时间对同一个文件，只能有一个hdfs客户端来写入
      * 所以说，他需要维护一个全局锁的东西
      * 也就是说，某个hdfs客户端想要写入一个文件，首先要跟namenode申请一个契约（Lease）
@@ -1686,6 +1686,8 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
      * 此时其他客户端也只能等待
      *
      * 所以hdfs的理念就是，一次写入 多次读取，这样很少会有多客户端并发写入的情况了
+     *
+     * 开启文件的续约，启动一个线程，不断的去namenode进行契约的续约
      */
     beginFileLease(result.getFileId(), result);
 

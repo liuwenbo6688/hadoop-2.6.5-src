@@ -376,6 +376,10 @@ class BlockSender implements java.io.Closeable {
       if (DataNode.LOG.isDebugEnabled()) {
         DataNode.LOG.debug("replica=" + replica);
       }
+
+      /**
+       *
+       */
       blockIn = datanode.data.getBlockInputStream(block, offset); // seek to offset
       if (blockIn instanceof FileInputStream) {
         blockInFd = ((FileInputStream)blockIn).getFD();
@@ -736,16 +740,23 @@ class BlockSender implements java.io.Closeable {
 
       while (endOffset > offset && !Thread.currentThread().isInterrupted()) {
         manageOsCache();
+
+        // 先发送一个空缺，建立管道，初始化好对应的 BlockReceiver，Responser
+        // 一个一个packet的发送过去
+        // 一个packet是64KB, 每个packet包含了127个chunk，一个chunk是516字节
         long len = sendPacket(pktBuf, maxChunksPerPacket, streamForSendChunks,
             transferTo, throttler);
+
         offset += len;
         totalRead += len + (numberOfChunks(len) * checksumSize);
         seqno++;
       }
+
       // If this thread was interrupted, then it did not send the full block.
       if (!Thread.currentThread().isInterrupted()) {
         try {
           // send an empty packet to mark the end of the block
+          // 发送完所有的packet之后，发送一个空的packet表明block已经传输结束了
           sendPacket(pktBuf, maxChunksPerPacket, streamForSendChunks, transferTo,
               throttler);
           out.flush();
@@ -755,6 +766,8 @@ class BlockSender implements java.io.Closeable {
 
         sentEntireByteRange = true;
       }
+
+
     } finally {
       if ((clientTraceFmt != null) && ClientTraceLog.isDebugEnabled()) {
         final long endTime = System.nanoTime();

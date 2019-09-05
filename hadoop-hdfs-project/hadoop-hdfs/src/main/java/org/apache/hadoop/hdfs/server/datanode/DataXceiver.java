@@ -173,6 +173,7 @@ class DataXceiver extends Receiver implements Runnable {
   
   /**
    * Read/write data from/to the DataXceiverServer.
+   *
    */
   @Override
   public void run() {
@@ -182,6 +183,8 @@ class DataXceiver extends Receiver implements Runnable {
     try {
       dataXceiverServer.addPeer(peer, Thread.currentThread(), this);
       peer.setWriteTimeout(datanode.getDnConf().socketWriteTimeout);
+
+      //下面这段就是拿到输入和输出流
       InputStream input = socketIn;
       try {
         IOStreamPair saslStreams = datanode.saslServer.receive(peer, socketOut,
@@ -213,6 +216,7 @@ class DataXceiver extends Receiver implements Runnable {
           } else {
             peer.setReadTimeout(dnConf.socketTimeout);
           }
+          // 在这里读到的就是客户端发送的 WRITE_BLOCK 这么一个操作，写block的操作
           op = readOp();
         } catch (InterruptedIOException ignored) {
           // Time out while we wait for client rpc
@@ -236,10 +240,16 @@ class DataXceiver extends Receiver implements Runnable {
         }
 
         opStartTime = now();
+        /**
+         * 处理这个 WRITE_BLOCK 的操作
+         */
         processOp(op);
+
         ++opsProcessed;
       } while ((peer != null) &&
           (!peer.isClosed() && dnConf.socketKeepaliveTimeout > 0));
+
+
     } catch (Throwable t) {
       String s = datanode.getDisplayName() + ":DataXceiver error processing "
           + ((op == null) ? "unknown" : op.name()) + " operation "
@@ -511,6 +521,9 @@ class DataXceiver extends Receiver implements Runnable {
 
     try {
       try {
+        /**
+         *
+         */
         blockSender = new BlockSender(block, blockOffset, length,
             true, false, sendChecksum, datanode, clientTraceFmt,
             cachingStrategy);
@@ -524,7 +537,12 @@ class DataXceiver extends Receiver implements Runnable {
       // send op status
       writeSuccessWithChecksumInfo(blockSender, new DataOutputStream(getOutputStream()));
 
+
+      /**
+       *
+       */
       long read = blockSender.sendBlock(out, baseStream, null); // send data
+
 
       if (blockSender.didSendEntireByteRange()) {
         // If we sent the entire range, then we should expect the client
@@ -571,6 +589,8 @@ class DataXceiver extends Receiver implements Runnable {
     datanode.metrics.incrReadsFromClient(peer.isLocal());
   }
 
+
+  // 这个方法的参数太他妈多了，什么玩意
   @Override
   public void writeBlock(final ExtendedBlock block,
       final StorageType storageType, 
@@ -587,6 +607,7 @@ class DataXceiver extends Receiver implements Runnable {
       DataChecksum requestedChecksum,
       CachingStrategy cachingStrategy,
       final boolean allowLazyPersist) throws IOException {
+
     previousOpClientName = clientname;
     updateCurrentThreadName("Receiving block " + block);
     final boolean isDatanode = clientname.length() == 0;
@@ -636,9 +657,16 @@ class DataXceiver extends Receiver implements Runnable {
     Status mirrorInStatus = SUCCESS;
     final String storageUuid;
     try {
+
+
+      /**
+       * 这边干的第一件事情，就是初始化这个 BlockReceiver
+       */
       if (isDatanode || 
           stage != BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
         // open a block receiver
+        // blockReceiver 组件负责接收上游发送的packet数据包，将packet数据包存储在本地的磁盘文件里
+        // 同时还会将数据包发送到下游的datanode中
         blockReceiver = new BlockReceiver(block, storageType, in,
             peer.getRemoteAddressString(),
             peer.getLocalAddressString(),
@@ -652,10 +680,14 @@ class DataXceiver extends Receiver implements Runnable {
             block, latestGenerationStamp, minBytesRcvd);
       }
 
+
+
       //
       // Connect to downstream machine, if appropriate
       //
       if (targets.length > 0) {
+        // 下面一部分代码,就是建立好跟下面第二个datanode的一个socket连接以及各种流
+
         InetSocketAddress mirrorTarget = null;
         // Connect to backup machine
         mirrorNode = targets[0].getXferAddr(connectToDnViaHostname);
@@ -687,6 +719,8 @@ class DataXceiver extends Receiver implements Runnable {
               HdfsConstants.SMALL_BUFFER_SIZE));
           mirrorIn = new DataInputStream(unbufMirrorIn);
 
+          // 向下一个datanode写一个空块
+          // 下游节点也会一样，本地创建一个磁盘文件然后再往下游发送空块，这样一直建立好这个管道流 pipeline
           // Do not propagate allowLazyPersist to downstream DataNodes.
           new Sender(mirrorOut).writeBlock(originalBlock, targetStorageTypes[0],
               blockToken, clientname, targets, targetStorageTypes, srcDataNode,
@@ -755,14 +789,21 @@ class DataXceiver extends Receiver implements Runnable {
       // receive the block and mirror to the next target
       if (blockReceiver != null) {
         String mirrorAddr = (mirrorSock == null) ? null : mirrorNode;
+
+        /**
+         *  调用  blockReceiver的receiveBlock方法一直卡在这，接收block的数据，直到所有的packet都接收完成
+         */
         blockReceiver.receiveBlock(mirrorOut, mirrorIn, replyOut,
             mirrorAddr, null, targets, false);
+
 
         // send close-ack for transfer-RBW/Finalized 
         if (isTransfer) {
           if (LOG.isTraceEnabled()) {
             LOG.trace("TRANSFER: send close-ack");
           }
+          // 如果判断读取完了一个block所有的packet之后
+          // hdfs客户端最后一定会发送一个空的packet过来，标识说这个block的packet都传输完毕了
           writeResponse(SUCCESS, null, replyOut);
         }
       }
@@ -790,6 +831,7 @@ class DataXceiver extends Receiver implements Runnable {
       throw ioe;
     } finally {
       // close all opened streams
+      // 关闭各种流
       IOUtils.closeStream(mirrorOut);
       IOUtils.closeStream(mirrorIn);
       IOUtils.closeStream(replyOut);

@@ -38,6 +38,12 @@ import com.google.common.annotations.VisibleForTesting;
  * This is created to listen for requests from clients or 
  * other DataNodes.  This small server does not use the 
  * Hadoop IPC mechanism.
+ * 是一个线程，专门用来接收或者发送一个数据block
+ * 这个东西创建了以后，远门负责监听从hdfs客户端或者其他datanode发送过来的数据
+ *
+ * 这个东西走底层的socket网络连接和请求的，不是走hadoop的rpc远程接口调用的
+ *
+ * 直接看 run 方法
  */
 class DataXceiverServer implements Runnable {
   public static final Log LOG = DataNode.LOG;
@@ -130,8 +136,12 @@ class DataXceiverServer implements Runnable {
   @Override
   public void run() {
     Peer peer = null;
+
+    // -------------------------while start------------------------------------
     while (datanode.shouldRun && !datanode.shutdownForUpgrade) {
       try {
+        // 线程一旦启动，就在这个while true循环
+        // accept方法等待别人建立连接，接收socket连接，拿到一个peer
         peer = peerServer.accept();
 
         // Make sure the xceiver count is not exceeded
@@ -142,9 +152,12 @@ class DataXceiverServer implements Runnable {
               + maxXceiverCount);
         }
 
+        //只要别人建立了连接，就直接启动一个后台线程，DataXceiver，专门负责处理这个连接所有的请求和响应
+        // 跟到 DataXceiver.run 方法里继续看
         new Daemon(datanode.threadGroup,
             DataXceiver.create(peer, datanode, this))
             .start();
+
       } catch (SocketTimeoutException ignored) {
         // wake up to see if should continue to run
       } catch (AsynchronousCloseException ace) {
@@ -173,6 +186,7 @@ class DataXceiverServer implements Runnable {
         datanode.shouldRun = false;
       }
     }
+    // -------------------------while end------------------------------------
 
     // Close the server to stop reception of more requests.
     try {

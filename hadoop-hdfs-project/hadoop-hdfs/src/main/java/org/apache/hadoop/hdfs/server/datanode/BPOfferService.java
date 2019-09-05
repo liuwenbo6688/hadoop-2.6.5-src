@@ -231,6 +231,9 @@ class BPOfferService {
    * Informing the name node could take a long long time! Should we wait
    * till namenode is informed before responding with success to the
    * client? For now we don't.
+   *
+   * 在这里，这个其实是一个异步通知的过程，不会因为要通知 namenode 自己接收了一个block而等待很长的时间
+   * 直接返回，然后就发送ack响应消息给上游的datanode，一直到通知那个hdfs客户端
    */
   void notifyNamenodeReceivedBlock(
       ExtendedBlock block, String delHint, String storageUuid) {
@@ -241,6 +244,7 @@ class BPOfferService {
         delHint);
 
     for (BPServiceActor actor : bpServices) {
+      // 分别通知 active和standby 两个namenode
       actor.notifyNamenodeBlock(bInfo, storageUuid, true);
     }
   }

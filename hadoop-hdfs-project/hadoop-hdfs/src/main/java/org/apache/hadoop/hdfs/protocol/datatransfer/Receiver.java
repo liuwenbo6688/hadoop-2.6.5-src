@@ -67,12 +67,20 @@ public abstract class Receiver implements DataTransferProtocol {
   /** Process op by the corresponding method. */
   protected final void processOp(Op op) throws IOException {
     switch(op) {
+      /**
+       *
+       */
     case READ_BLOCK:
       opReadBlock();
       break;
+
+      /**
+       * 处理写请求
+       */
     case WRITE_BLOCK:
       opWriteBlock(in);
       break;
+
     case REPLACE_BLOCK:
       opReplaceBlock(in);
       break;
@@ -133,7 +141,9 @@ public abstract class Receiver implements DataTransferProtocol {
     final DatanodeInfo[] targets = PBHelper.convert(proto.getTargetsList());
     TraceScope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
+
     try {
+
       writeBlock(PBHelper.convert(proto.getHeader().getBaseHeader().getBlock()),
           PBHelper.convertStorageType(proto.getStorageType()),
           PBHelper.convert(proto.getHeader().getBaseHeader().getToken()),
@@ -150,9 +160,11 @@ public abstract class Receiver implements DataTransferProtocol {
               getCachingStrategy(proto.getCachingStrategy()) :
             CachingStrategy.newDefaultStrategy()),
             (proto.hasAllowLazyPersist() ? proto.getAllowLazyPersist() : false));
+
      } finally {
       if (traceScope != null) traceScope.close();
      }
+
   }
 
   /** Receive {@link Op#TRANSFER_BLOCK} */

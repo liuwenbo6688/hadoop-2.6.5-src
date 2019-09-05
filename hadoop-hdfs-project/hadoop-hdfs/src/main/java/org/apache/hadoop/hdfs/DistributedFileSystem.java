@@ -303,8 +303,11 @@ public class DistributedFileSystem extends FileSystem {
       @Override
       public FSDataInputStream doCall(final Path p)
           throws IOException, UnresolvedLinkException {
+
+        // 通过 DFSClient 的open方法拿到输入流
         final DFSInputStream dfsis =
           dfs.open(getPathName(p), bufferSize, verifyChecksum);
+
         return dfs.createWrappedInputStream(dfsis);
       }
       @Override

@@ -224,7 +224,10 @@ public class DFSOutputStream extends FSOutputSummer
     boolean syncBlock; // this packet forces the current block to disk
     int numChunks; // number of chunks currently in packet
     final int maxChunks; // max chunks in packet
+
+    // packet里的数据，是包含了一个checksum对应一个chunk，一次写入
     private byte[] buf;
+
     private boolean lastPacketInBlock; // is this the last packet in block?
 
     /**
@@ -384,7 +387,11 @@ public class DFSOutputStream extends FSOutputSummer
     private volatile ExtendedBlock block; // its length is number of bytes acked
     private Token<BlockTokenIdentifier> accessToken;
     private DataOutputStream blockStream;
+
+    // 通过 blockReplyStream 就可以从hdfs客户端直接对接的第一个datanode获取输入流
+    // 可以通过整个流读取第一个datanode返回的响应消息
     private DataInputStream blockReplyStream;
+
     private ResponseProcessor response = null;
     private volatile DatanodeInfo[] nodes = null; // list of targets for current block
     private volatile StorageType[] storageTypes = null;
@@ -548,7 +555,7 @@ public class DFSOutputStream extends FSOutputSummer
         traceScope = Trace.continueSpan(traceSpan);
       }
 
-      //
+      //---- while循环开始 ----
       while (!streamerClosed && dfsClient.clientRunning) {
 
         // if the Responder encountered an error, shutdown Responder
@@ -603,9 +610,12 @@ public class DFSOutputStream extends FSOutputSummer
             if (dataQueue.isEmpty()) {
               one = createHeartbeatPacket();
             } else {
+              // 先进先出
               one = dataQueue.getFirst(); // regular data packet
             }
           }
+
+          // 这里已经拿到了一个 packet 了
           assert one != null;
 
           // get new block from namenode.
@@ -613,8 +623,13 @@ public class DFSOutputStream extends FSOutputSummer
             if(DFSClient.LOG.isDebugEnabled()) {
               DFSClient.LOG.debug("Allocating new block");
             }
-            setPipeline(nextBlockOutputStream());
+
+            // nextBlockOutputStream() 方法其实就是负责跟namenode去申请一个新的block、建立好数据流的管道
+            setPipeline( nextBlockOutputStream() );
+
+            //
             initDataStreaming();
+
           } else if (stage == BlockConstructionStage.PIPELINE_SETUP_APPEND) {
             if(DFSClient.LOG.isDebugEnabled()) {
               DFSClient.LOG.debug("Append to block " + block);
@@ -632,11 +647,17 @@ public class DFSOutputStream extends FSOutputSummer
                 " Aborting file " + src);
           }
 
+
           if (one.lastPacketInBlock) {
+            //如果是当前block发送的最后一个packet的话，那么就会在这里陷入一个无限的循环和等待，等待之前发送的block
+            //里面的packet全部被处理掉，都上传好
             // wait for all data packets have been successfully acked
             synchronized (dataQueue) {
-              while (!streamerClosed && !hasError && 
-                  ackQueue.size() != 0 && dfsClient.clientRunning) {
+              while (!streamerClosed
+                      && !hasError
+                      // ackQueue == 0 才意味着都确认成功了
+                      && ackQueue.size() != 0
+                      && dfsClient.clientRunning) {
                 try {
                   // wait for acks to arrive from datanodes
                   dataQueue.wait(1000);
@@ -655,6 +676,7 @@ public class DFSOutputStream extends FSOutputSummer
           synchronized (dataQueue) {
             // move packet from dataQueue to ackQueue
             if (!one.isHeartbeatPacket()) {
+              //锁住dataQueue，然后从dataQueue队列中移除第一个，并加入到 ackQueue 中
               dataQueue.removeFirst();
               ackQueue.addLast(one);
               dataQueue.notifyAll();
@@ -666,8 +688,10 @@ public class DFSOutputStream extends FSOutputSummer
                 " sending packet " + one);
           }
 
+          // 向远程的 datanode 写数据
           // write out data to remote datanode
           try {
+            // 直接将packet的数据刷到 datanode 上去
             one.writeTo(blockStream);
             blockStream.flush();   
           } catch (IOException e) {
@@ -680,6 +704,8 @@ public class DFSOutputStream extends FSOutputSummer
             tryMarkPrimaryDatanodeFailed();
             throw e;
           }
+
+
           lastPacket = Time.now();
           
           // update bytesSent
@@ -705,6 +731,7 @@ public class DFSOutputStream extends FSOutputSummer
               continue;
             }
 
+            // 结束这个block，包括关闭各种流 + 设置 stage 变量
             endBlock();
           }
           if (progress != null) { progress.progress(); }
@@ -730,6 +757,10 @@ public class DFSOutputStream extends FSOutputSummer
           }
         }
       }
+      //-----while循环结束-----
+
+
+
       if (traceScope != null) {
         traceScope.close();
       }
@@ -1349,8 +1380,14 @@ public class DFSOutputStream extends FSOutputSummer
     /**
      * Open a DataOutputStream to a DataNode so that it can be written to.
      * This happens when a file is created and each time a new block is allocated.
+     *
      * Must get block ID and the IDs of the destinations from the namenode.
      * Returns the list of target datanodes.
+     *
+     * 这个操作一般会发生在一个文件被创建和一个新的block被分配的时候
+     *
+     * 会给你返回 blockid 和 副本分布在哪些节点上（datanode）
+     *
      */
     private LocatedBlock nextBlockOutputStream() throws IOException {
       LocatedBlock lb = null;
@@ -1371,8 +1408,14 @@ public class DFSOutputStream extends FSOutputSummer
             .keySet()
             .toArray(new DatanodeInfo[0]);
         block = oldBlock;
+
+
+        // 找namenode申请一个新的block就在这里
+        // 到这里已经拿到一个block的id 和 datanodes 列表
+        // excluded 其实就是有故障的列表，告诉namenode，不要在给我分配这些节点了
         lb = locateFollowingBlock(startTime,
             excluded.length > 0 ? excluded : null);
+
         block = lb.getBlock();
         block.setNumBytes(0);
         bytesSent = 0;
@@ -1382,15 +1425,26 @@ public class DFSOutputStream extends FSOutputSummer
 
         //
         // Connect to first DataNode in the list.
-        //
+        // 直接对block的datanodes列表中的第一个节点建立连接，创建输出流
         success = createBlockOutputStream(nodes, storageTypes, 0L, false);
 
         if (!success) {
+          // 如果连接失败的情况下
+          /**
+           * 故障处理机制
+           * 如果这里尝试连接到这个block的第一个datanode失败了，
+           * 此处应该会找namenode，抛弃这个block
+           * 下一轮循环，重试，找namenode重新再申请一个block以及他的datanode列表
+           * 可以猜测，一定会上报这个故障的datanode给namenode
+           * namenode在机架感知算法里，下次给新的block分配datanode的时候，就会避免分配有问题的datanode
+           */
           DFSClient.LOG.info("Abandoning " + block);
           dfsClient.namenode.abandonBlock(block, fileId, src,
               dfsClient.clientName);
           block = null;
           DFSClient.LOG.info("Excluding datanode " + nodes[errorIndex]);
+          // 放到 excludedNodes 列表中去
+          // errorIndex就是哪一个datanode出错了，就是datanodes数组的下标
           excludedNodes.put(nodes[errorIndex], nodes[errorIndex]);
         }
       } while (!success && --count >= 0);
@@ -1430,7 +1484,10 @@ public class DFSOutputStream extends FSOutputSummer
         try {
           assert null == s : "Previous socket unclosed";
           assert null == blockReplyStream : "Previous blockReplyStream unclosed";
+
+          // 针对datanode list中的第一个node ， 也就是 nodes[0]，创建输出管道
           s = createSocketForPipeline(nodes[0], nodes.length, dfsClient);
+
           long writeTimeout = dfsClient.getDatanodeWriteTimeout(nodes.length);
           
           OutputStream unbufOut = NetUtils.getOutputStream(s, writeTimeout);
@@ -1441,6 +1498,8 @@ public class DFSOutputStream extends FSOutputSummer
           unbufIn = saslStreams.in;
           out = new DataOutputStream(new BufferedOutputStream(unbufOut,
               HdfsConstants.SMALL_BUFFER_SIZE));
+          // 通过 blockReplyStream 就可以从hdfs客户端直接对接的第一个datanode获取输入流
+          // 可以通过整个流读取第一个datanode返回的响应消息
           blockReplyStream = new DataInputStream(unbufIn);
   
           //
@@ -1455,12 +1514,14 @@ public class DFSOutputStream extends FSOutputSummer
           blockCopy.setNumBytes(blockSize);
 
           // send the request
+          // 此时发送过去的block其实还是空块
           new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
               dfsClient.clientName, nodes, nodeStorageTypes, null, bcs, 
               nodes.length, block.getNumBytes(), bytesSent, newGS,
               checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile);
   
           // receive ack for connect
+          // 等待获取datanode那边返回建立好连接的ack消息，（其实就是datanode创建本地磁盘文件+管道流）
           BlockOpResponseProto resp = BlockOpResponseProto.parseFrom(
               PBHelper.vintPrefixed(blockReplyStream));
           pipelineStatus = resp.getStatus();
@@ -1476,6 +1537,7 @@ public class DFSOutputStream extends FSOutputSummer
             checkRestart = true;
             throw new IOException("A datanode is restarting.");
           }
+
           if (pipelineStatus != SUCCESS) {
             if (pipelineStatus == Status.ERROR_ACCESS_TOKEN) {
               throw new InvalidBlockTokenException(
@@ -1550,12 +1612,16 @@ public class DFSOutputStream extends FSOutputSummer
         DatanodeInfo[] excludedNodes)  throws IOException {
       int retries = dfsClient.getConf().nBlockWriteLocateFollowingRetry;
       long sleeptime = 400;
+
       while (true) {
         long localstart = Time.now();
         while (true) {
           try {
+            // 哪个客户端: clientName
+            // 要为哪个文件申请block: src
             return dfsClient.namenode.addBlock(src, dfsClient.clientName,
                 block, excludedNodes, fileId, favoredNodes);
+
           } catch (RemoteException e) {
             IOException ue = 
               e.unwrapRemoteException(FileNotFoundException.class,
@@ -1859,9 +1925,19 @@ public class DFSOutputStream extends FSOutputSummer
   }
 
   private void computePacketChunkSize(int psize, int csize) {
+
+    // csize 其实是512字节
+    // ChecksumSize 是4个字节
     final int chunkSize = csize + getChecksumSize();
+
+    // 一个packet里面可以有几个chunk
+    // chunkSize = 516 字节
+    // psize  = 65536字节 = 64kb
     chunksPerPacket = Math.max(psize/chunkSize, 1);
+
+    // 64kb
     packetSize = chunkSize*chunksPerPacket;
+
     if (DFSClient.LOG.isDebugEnabled()) {
       DFSClient.LOG.debug("computePacketChunkSize: src=" + src +
                 ", chunkSize=" + chunkSize +
@@ -1878,6 +1954,7 @@ public class DFSOutputStream extends FSOutputSummer
       if (DFSClient.LOG.isDebugEnabled()) {
         DFSClient.LOG.debug("Queued packet " + currentPacket.seqno);
       }
+      //这样就相当于重新开启一个packet了
       currentPacket = null;
       dataQueue.notifyAll();
     }
@@ -1886,24 +1963,29 @@ public class DFSOutputStream extends FSOutputSummer
   private void waitAndQueueCurrentPacket() throws IOException {
     synchronized (dataQueue) {
       try {
-      // If queue is full, then wait till we have enough space
-      while (!closed && dataQueue.size() + ackQueue.size()  > dfsClient.getConf().writeMaxPackets) {
-        try {
-          dataQueue.wait();
-        } catch (InterruptedException e) {
-          // If we get interrupted while waiting to queue data, we still need to get rid
-          // of the current packet. This is because we have an invariant that if
-          // currentPacket gets full, it will get queued before the next writeChunk.
-          //
-          // Rather than wait around for space in the queue, we should instead try to
-          // return to the caller as soon as possible, even though we slightly overrun
-          // the MAX_PACKETS length.
-          Thread.currentThread().interrupt();
-          break;
+        // If queue is full, then wait till we have enough space
+        while (!closed && dataQueue.size() + ackQueue.size() > dfsClient.getConf().writeMaxPackets) {
+          try {
+            // 队列如果是满的情况下，一直阻塞等待
+            dataQueue.wait();
+          } catch (InterruptedException e) {
+            // If we get interrupted while waiting to queue data, we still need to get rid
+            // of the current packet. This is because we have an invariant that if
+            // currentPacket gets full, it will get queued before the next writeChunk.
+            //
+            // Rather than wait around for space in the queue, we should instead try to
+            // return to the caller as soon as possible, even though we slightly overrun
+            // the MAX_PACKETS length.
+            Thread.currentThread().interrupt();
+            break;
+          }
         }
-      }
-      checkClosed();
-      queueCurrentPacket();
+        checkClosed();
+
+        // 在这个地方把packet放到队列中，然后重新开启一个新的packet
+        // 这样可以继续写下一个packet了
+        queueCurrentPacket();
+
       } catch (ClosedChannelException e) {
       }
     }
@@ -1926,9 +2008,11 @@ public class DFSOutputStream extends FSOutputSummer
                             getChecksumSize() + " but found to be " + cklen);
     }
 
+    // 当前的 packet 是空的话，新建一个 packet 出来
     if (currentPacket == null) {
       currentPacket = createPacket(packetSize, chunksPerPacket, 
           bytesCurBlock, currentSeqno++);
+
       if (DFSClient.LOG.isDebugEnabled()) {
         DFSClient.LOG.debug("DFSClient writeChunk allocating new packet seqno=" + 
             currentPacket.seqno +
@@ -1939,15 +2023,23 @@ public class DFSOutputStream extends FSOutputSummer
       }
     }
 
+    // 写入Checksum
     currentPacket.writeChecksum(checksum, ckoff, cklen);
+    // 写入数据
     currentPacket.writeData(b, offset, len);
+    // 更新你已经往这个packet里写了几个chunk了
     currentPacket.numChunks++;
+    // 当前block写入的大小
     bytesCurBlock += len;
 
     // If packet is full, enqueue it for transmission
     //
     if (currentPacket.numChunks == currentPacket.maxChunks ||
         bytesCurBlock == blockSize) {
+      /**
+       * 判断一下，如果说当前这个packet里面的chunk数量已经达到127（最大的chunk数量）之后
+       * 或者当前的block的数据量大小已经等于默认配置的那个block的数据量的大小
+       */
       if (DFSClient.LOG.isDebugEnabled()) {
         DFSClient.LOG.debug("DFSClient writeChunk packet full seqno=" +
             currentPacket.seqno +
@@ -1956,6 +2048,8 @@ public class DFSOutputStream extends FSOutputSummer
             ", blockSize=" + blockSize +
             ", appendChunk=" + appendChunk);
       }
+
+      //在这里，这个方法就会将 当前这个packet放到 dataQueue 中去
       waitAndQueueCurrentPacket();
 
       // If the reopened file did not end at chunk boundary and the above
@@ -1975,6 +2069,8 @@ public class DFSOutputStream extends FSOutputSummer
       // indicate the end of block and reset bytesCurBlock.
       //
       if (bytesCurBlock == blockSize) {
+        // 如果一个block已经写满，写入一个空的packet
+        // 空的packet其实就是作为block的划分
         currentPacket = createPacket(0, 0, bytesCurBlock, currentSeqno++);
         currentPacket.lastPacketInBlock = true;
         currentPacket.syncBlock = shouldSyncBlock;

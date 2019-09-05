@@ -482,6 +482,7 @@ class BlockPoolSliceScanner {
         if (second) {
           totalScanErrors++;
           datanode.getMetrics().incrBlockVerificationFailures();
+          // 处理失败的情况
           handleScanFailure(block);
           return;
         } 
@@ -647,6 +648,7 @@ class BlockPoolSliceScanner {
     }
     // Start scanning
     try {
+      // 开始扫描
       scan();
     } finally {
       totalBlocksScannedInLastRun.set(processedBlocks.size());

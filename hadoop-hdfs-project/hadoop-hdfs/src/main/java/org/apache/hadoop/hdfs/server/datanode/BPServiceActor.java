@@ -393,15 +393,20 @@ class BPServiceActor implements Runnable {
    */
   void notifyNamenodeBlock(ReceivedDeletedBlockInfo bInfo,
       String storageUuid, boolean now) {
+    // 走了异步化的方式发送的请求，不是直接向namenode发送的请求
     synchronized (pendingIncrementalBRperStorage) {
+
       addPendingReplicationBlockInfo(
           bInfo, dn.getFSDataset().getStorage(storageUuid));
+
       sendImmediateIBR = true;
+
       // If now is true, the report is sent right away.
       // Otherwise, it will be sent out in the next heartbeat.
       if (now) {
         pendingIncrementalBRperStorage.notifyAll();
       }
+
     }
   }
 
@@ -487,6 +492,8 @@ class BPServiceActor implements Runnable {
   List<DatanodeCommand> blockReport() throws IOException {
     // send block report if timer has expired.
     final long startTime = now();
+
+    //
     if (startTime - lastBlockReport <= dnConf.blockReportInterval) {
       return null;
     }
@@ -778,7 +785,8 @@ class BPServiceActor implements Runnable {
 
         //********* 下面的是在不断的向namenode汇报自己的block *************************************************************
         /**
-         * 默认5分钟
+         *  默认5分钟，增量汇报
+         *  把最近5分钟接收到的或者删除掉的block数据汇报给namenode
          */
         if (sendImmediateIBR ||
             (startTime - lastDeletedReport > dnConf.deleteReportInterval)) {
@@ -787,7 +795,7 @@ class BPServiceActor implements Runnable {
         }
 
         /**
-         * 汇报block
+         * 每隔6小时进行一次全量汇报block
          * 默认 6小时
          */
         List<DatanodeCommand> cmds = blockReport();
