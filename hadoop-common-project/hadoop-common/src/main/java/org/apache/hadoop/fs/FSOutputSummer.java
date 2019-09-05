@@ -132,6 +132,8 @@ abstract public class FSOutputSummer extends OutputStream {
       // stream
       final int length = buf.length;
       writeChecksumChunks(b, off, length);
+
+      // 返回这次写入的数据大小
       return length;
     }
 

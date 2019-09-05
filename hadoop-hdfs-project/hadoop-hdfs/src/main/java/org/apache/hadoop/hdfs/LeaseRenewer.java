@@ -67,6 +67,8 @@ import com.google.common.annotations.VisibleForTesting;
  * </li>
  * </ul>
  * </p>
+ *
+ * DFSClient使用 LeaseRenewer 来向namenode 来申请正在写入的文件的契约
  */
 class LeaseRenewer {
   static final Log LOG = LogFactory.getLog(LeaseRenewer.class);
@@ -301,6 +303,9 @@ class LeaseRenewer {
                 LOG.debug("Lease renewer daemon for " + clientsString()
                     + " with renew id " + id + " started");
               }
+              /**
+               *
+               */
               LeaseRenewer.this.run(id);
             } catch(InterruptedException e) {
               if (LOG.isDebugEnabled()) {
@@ -440,8 +445,8 @@ class LeaseRenewer {
    * when the lease period is half over.
    */
   private void run(final int id) throws InterruptedException {
-    for(long lastRenewed = Time.now(); !Thread.interrupted();
-        Thread.sleep(getSleepPeriod())) {
+
+    for(long lastRenewed = Time.now(); !Thread.interrupted(); Thread.sleep(getSleepPeriod())) {
       final long elapsed = Time.now() - lastRenewed;
       if (elapsed >= getRenewalTime()) {
         try {

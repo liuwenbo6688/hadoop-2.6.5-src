@@ -191,6 +191,15 @@ public class DFSOutputStream extends FSOutputSummer
       BlockStoragePolicySuite.createDefaultSuite();
 
   /** Use {@link ByteArrayManager} to create buffer for non-heartbeat packets.*/
+  /**
+   * 新建一个packet
+   * @param packetSize     packet的大小，默认是64KB
+   * @param chunksPerPkt   一个packet由多少个chunk组成
+   * @param offsetInBlock  这个packet在当前 block 中的字节偏移
+   * @param seqno    每个packet都有一个序号，自增唯一的
+   * @return
+   * @throws InterruptedIOException
+   */
   private Packet createPacket(int packetSize, int chunksPerPkt, long offsetInBlock,
       long seqno) throws InterruptedIOException {
     final byte[] buf;
@@ -294,10 +303,11 @@ public class DFSOutputStream extends FSOutputSummer
     
     /**
      * Write the full packet, including the header, to the given output stream.
+     * 把整个packet写到对应的输出流里（包括头信息）
      */
     void writeTo(DataOutputStream stm) throws IOException {
-      final int dataLen = dataPos - dataStart;
-      final int checksumLen = checksumPos - checksumStart;
+      final int dataLen = dataPos - dataStart; //数据的长度
+      final int checksumLen = checksumPos - checksumStart;// checksum的长度
       final int pktLen = HdfsConstants.BYTES_IN_INTEGER + dataLen + checksumLen;
 
       PacketHeader header = new PacketHeader(
@@ -320,6 +330,7 @@ public class DFSOutputStream extends FSOutputSummer
       
       // Copy the header data into the buffer immediately preceding the checksum
       // data.
+      // 复制 header 到 buf中
       System.arraycopy(header.getBytes(), 0, buf, headerStart,
           header.getSerializedSize());
       
@@ -329,6 +340,7 @@ public class DFSOutputStream extends FSOutputSummer
       }
 
       // Write the now contiguous full packet to the output stream.
+      // 这里是写入数据的地方
       stm.write(buf, headerStart, header.getSerializedSize() + checksumLen + dataLen);
 
       // undo corruption.
@@ -1798,7 +1810,7 @@ public class DFSOutputStream extends FSOutputSummer
     /**
      * 默认的话，
      * 一个block是128mb，
-     * 每个block在上传的时候，是由多个packet数据包组成的，每个packet数据包的大小是64mb，
+     * 每个block在上传的时候，是由多个packet数据包组成的，每个packet数据包的大小是 64 kb，
      * 每个packet数据包是由多个chunk组成的，一个chunk可以作为一个数据上传的小碎片
      * chunk是516字节
      * 一个packet数据包里还有多个checksum，校验块，每个是512字节
@@ -2010,6 +2022,10 @@ public class DFSOutputStream extends FSOutputSummer
 
     // 当前的 packet 是空的话，新建一个 packet 出来
     if (currentPacket == null) {
+
+      /**
+       * 新建一个packet
+       */
       currentPacket = createPacket(packetSize, chunksPerPacket, 
           bytesCurBlock, currentSeqno++);
 
