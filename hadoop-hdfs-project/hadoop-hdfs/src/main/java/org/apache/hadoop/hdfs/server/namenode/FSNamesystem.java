@@ -3296,7 +3296,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
    * hdfs 客户端想要申请一个新的block，这个block是属于一个文件的
    * 这个方法会返回一个block，里面包含了这个block的副本都在哪些机器上面（datanode）
    * 这个block里面的对个datanode中的第一个，就是hdfs客户端写数据的那个节点
-   * 其他的datanode需要跟第一个datanode简历连接，数据管道
+   * 其他的datanode需要跟第一个datanode建立连接，数据管道
    */
   LocatedBlock getAdditionalBlock(String src, long fileId, String clientName,
       ExtendedBlock previous, Set<Node> excludedNodes, 
@@ -3371,6 +3371,11 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       // Run the full analysis again, since things could have changed
       // while chooseTarget() was executing.
       LocatedBlock[] onRetryBlock = new LocatedBlock[1];
+
+      /**
+       * 拿到对应文件的 INodeFile
+       * 后面会把文件对应的block加入到INodeFile中
+       */
       FileState fileState = 
           analyzeFileState(src, fileId, clientName, previous, onRetryBlock);
       final INodeFile pendingFile = fileState.inode;
@@ -3396,8 +3401,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
       // allocate new block, record block locations in INode.
       // 创建了一个block，id是全局递增的
-      // 将这个block放到 文件目录树的叶子节点里面去，挂到内存元数据里面
       newBlock = createNewBlock();
+
+      // 将这个block放到 文件目录树的叶子节点里面去，挂到内存元数据里面
       INodesInPath inodesInPath = INodesInPath.fromINode(pendingFile);
       saveAllocatedBlock(src, inodesInPath, newBlock, targets);
 
@@ -3819,7 +3825,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
           throws IOException {
     assert hasWriteLock();
 
-    //
+    // 把block加入INodeFile中
     BlockInfo b = dir.addBlock(src, inodes, newBlock, targets);
 
     NameNode.stateChangeLog.info("BLOCK* allocateBlock: " + src + ". "
