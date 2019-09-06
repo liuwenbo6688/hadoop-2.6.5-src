@@ -267,6 +267,7 @@ class BlockPoolSlice {
   /**
    * RBW files. They get moved to the finalized block directory when
    * the block is finalized.
+   * RBW 文件，当block传输结束，都会移动到finalized block directory
    */
   File createRbwFile(Block b) throws IOException {
     //

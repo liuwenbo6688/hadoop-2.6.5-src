@@ -1045,8 +1045,12 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   @Override // FsDatasetSpi
   public synchronized ReplicaInPipeline createRbw(StorageType storageType,
       ExtendedBlock b, boolean allowLazyPersist) throws IOException {
+
+    // 根据blockPoolId和blockId 从内存缓存中查询 ReplicaInfo
     ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(),
         b.getBlockId());
+
+    //  replicaInfo已经存在了，直接抛出异常，说明这个block已经存在文件了，不需要创建rbw
     if (replicaInfo != null) {
       throw new ReplicaAlreadyExistsException("Block " + b +
       " already exists in state " + replicaInfo.getState() +

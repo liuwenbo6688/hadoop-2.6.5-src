@@ -649,8 +649,13 @@ class DataXceiver extends Receiver implements Runnable {
     LOG.info("Receiving " + block + " src: " + remoteAddress + " dest: "
         + localAddress);
 
+    /**
+     * 这里的 mirror 就是下一个节点的意思，用镜像来表示
+     * 副本是从第一个datanode写到第二个 Datanode，再从第二个datanode写到第三个 Datanode
+     */
     DataOutputStream mirrorOut = null;  // stream to next target
     DataInputStream mirrorIn = null;    // reply from next target
+
     Socket mirrorSock = null;           // socket to next target
     String mirrorNode = null;           // the name:port of next target
     String firstBadLink = "";           // first datanode that failed in connection setup

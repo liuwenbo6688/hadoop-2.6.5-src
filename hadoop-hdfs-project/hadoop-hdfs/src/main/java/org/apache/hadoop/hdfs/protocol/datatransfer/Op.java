@@ -49,6 +49,11 @@ public enum Op {
   private static final int FIRST_CODE = values()[0].code;
   /** Return the object represented by the code. */
   private static Op valueOf(byte code) {
+    /**
+     *  枚举中的一个特殊方法，values()， 为什么说特殊呢，因为在Enum 的 API 文档中也找不到这个方法。
+        理论上此方法可以将枚举类转变为一个枚举类型的数组，因为枚举中没有下标，我们没有办法通过下标来快速找到需要的枚举类，
+         这时候，转变为数组之后，我们就可以通过数组的下标，来找到我们需要的枚举类。
+     */
     final int i = (code & 0xff) - FIRST_CODE;
     return i < 0 || i >= values().length? null: values()[i];
   }

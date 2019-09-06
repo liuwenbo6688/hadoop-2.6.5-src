@@ -87,7 +87,10 @@ class BlockReceiver implements Closeable {
    * the DataNode needs to recalculate checksums before writing.
    */
   private final boolean needsChecksumTranslation;
+
+  //输出到本地文件的输出流，写本地block文件的
   private OutputStream out = null; // to block file at local disk
+
   private FileDescriptor outFd;
   private DataOutputStream checksumOut = null; // to crc file at local disk
   private final int bytesPerChecksum;
@@ -537,10 +540,19 @@ class BlockReceiver implements Closeable {
                             header.getDataLen()); 
     }
 
+
+    /**
+     *  offsetInBlock： 是当前 packet 在block中的字节偏移
+     *  seqno ： 自增的序号
+     *  lastPacketInBlock  ： 是否是当前block的最有一个packet
+     *  len ： 数据的长度
+     */
     long offsetInBlock = header.getOffsetInBlock();
     long seqno = header.getSeqno();
     boolean lastPacketInBlock = header.isLastPacketInBlock();
     final int len = header.getDataLen();
+
+
     boolean syncBlock = header.getSyncBlock();
 
     // avoid double sync'ing on close
@@ -571,7 +583,7 @@ class BlockReceiver implements Closeable {
     if (mirrorOut != null && !mirrorError) {
       try {
         long begin = Time.monotonicNow();
-        // For testing. Normally no-op.
+        // For testing. Normally no-op. 这行代码啥玩意都没做
         DataNodeFaultInjector.get().stopSendingPacketDownstream();
 
         /**
@@ -929,7 +941,9 @@ class BlockReceiver implements Closeable {
     try {
       if (isClient && !isTransfer) {
 
-        // 在这又起了一个线程，
+        // 在这又起了一个线程，这个线程专门用来处理下游响应的
+        // 也就是上游向下游datanode发送的每一个packet，都必须得到下游datanode明确的返回信息
+        // 也就是一种ack机制
         responder = new Daemon(datanode.threadGroup, 
             new PacketResponder(replyOut, mirrIn, downstreams));
         responder.start(); // start thread to processes responses
@@ -1148,6 +1162,7 @@ class BlockReceiver implements Closeable {
   /**
    * Processes responses from downstream datanodes in the pipeline
    * and sends back replies to the originator.
+   * 处理管道流中下游datanode的响应信息
    */
   class PacketResponder implements Runnable, Closeable {   
     /** queue for packets waiting for ack - synchronization using monitor lock */
