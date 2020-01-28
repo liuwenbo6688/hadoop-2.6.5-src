@@ -853,7 +853,9 @@ public class DatanodeManager {
         LOG.info("Start Decommissioning " + node + " " + storage
             + " with " + storage.numBlocks() + " blocks");
       }
+      // 开始下线
       heartbeatManager.startDecommission(node);
+
       node.decommissioningStatus.setStartTime(now());
       
       // all the blocks that reside on this node have to be replicated.
@@ -1064,6 +1066,7 @@ public class DatanodeManager {
     refreshHostsReader(conf);
     namesystem.writeLock();
     try {
+      //......
       refreshDatanodes();
       countSoftwareVersions();
     } finally {
@@ -1094,7 +1097,9 @@ public class DatanodeManager {
       if (!hostFileManager.isIncluded(node)) {
         node.setDisallowed(true); // case 2.
       } else {
+        // 如果配置了exclude掉某台datanode机器
         if (hostFileManager.isExcluded(node)) {
+          //......
           startDecommission(node); // case 3.
         } else {
           stopDecommission(node); // case 4.

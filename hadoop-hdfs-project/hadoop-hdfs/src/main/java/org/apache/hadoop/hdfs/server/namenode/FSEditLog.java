@@ -741,6 +741,9 @@ public class FSEditLog implements LogsPurgeable {
         }
       } catch (IOException ex) {
         synchronized (this) {
+          // fatal 级别日志，灾难型的异常
+          // 无法将一个edits log写入大多数的journal node 集群
+          // 意味着一条edits log持久化存储失败
           final String msg =
               "Could not sync enough journals to persistent storage. "
               + "Unsynced transactions: " + (txid - synctxid);
@@ -748,6 +751,8 @@ public class FSEditLog implements LogsPurgeable {
           synchronized(journalSetLock) {
             IOUtils.cleanup(LOG, journalSet);
           }
+          // 终止  System.exit  大事不妙
+          // 会导致 namenode 进程宕机
           terminate(1, msg);
         }
       }

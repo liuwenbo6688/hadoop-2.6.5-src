@@ -1037,10 +1037,13 @@ public class BlockManager {
   }
 
    
-  /** Remove the blocks associated to the given datanode. */
+  /** Remove the blocks associated to the given datanode.
+   * 删除datanode关联的blocks数据
+   * */
   void removeBlocksAssociatedTo(final DatanodeDescriptor node) {
     final Iterator<? extends Block> it = node.getBlockIterator();
     while(it.hasNext()) {
+      //...
       removeStoredBlock(it.next(), node);
     }
     // Remove all pending DN messages referencing this DN.
@@ -1315,6 +1318,7 @@ public class BlockManager {
     } finally {
       namesystem.writeUnlock();
     }
+    // ......
     return computeReplicationWorkForBlocks(blocksToReplicate);
   }
 
@@ -1354,6 +1358,8 @@ public class BlockManager {
             containingNodes = new ArrayList<DatanodeDescriptor>();
             List<DatanodeStorageInfo> liveReplicaNodes = new ArrayList<DatanodeStorageInfo>();
             NumberReplicas numReplicas = new NumberReplicas();
+            // 选择一个block的source datanode
+            // 作为一个source  datanode来复制block副本给别的还完好的datanode
             srcNode = chooseSourceDatanode(
                 block, containingNodes, liveReplicaNodes, numReplicas,
                 priority);
@@ -1409,6 +1415,7 @@ public class BlockManager {
       // choose replication targets: NOT HOLDING THE GLOBAL LOCK
       // It is costly to extract the filename for which chooseTargets is called,
       // so for now we pass in the block collection itself.
+      // 选择复制的目标 datanode
       rw.chooseTargets(blockplacement, storagePolicySuite, excludedNodes);
     }
 
@@ -1462,6 +1469,7 @@ public class BlockManager {
             }
           }
 
+          // 核心方法： 对每个block的复制source datanode，都加入一个复制的目标datanode
           // Add block to the to be replicated list
           rw.srcNode.addBlockToBeReplicated(block, targets);
           scheduledWork++;
@@ -2974,6 +2982,7 @@ public class BlockManager {
       BlockCollection bc = blocksMap.getBlockCollection(block);
       if (bc != null) {
         namesystem.decrementSafeBlockCount(block);
+        //......
         updateNeededReplications(block, -1, 0);
       }
 
@@ -3404,7 +3413,12 @@ public class BlockManager {
       }
       NumberReplicas repl = countNodes(block);
       int curExpectedReplicas = getReplication(block);
+      /**
+       * 判断 当前这个block还存在的datanode上的副本数（可能就只有2各副本），期望的副本因子数量（期望3个副本）
+       * 判断一下当前的block副本数是否充足，是否需要复制
+       */
       if (isNeededReplication(block, curExpectedReplicas, repl.liveReplicas())) {
+        // 副本数不足的话，放到 neededReplications 中去
         neededReplications.update(block, repl.liveReplicas(), repl
             .decommissionedReplicas(), curExpectedReplicas, curReplicasDelta,
             expectedReplicasDelta);
@@ -3623,7 +3637,9 @@ public class BlockManager {
         try {
           // Process replication work only when active NN is out of safe mode.
           if (namesystem.isPopulatingReplQueues()) {
+            //
             computeDatanodeWork();
+
             processPendingReplications();
           }
           Thread.sleep(replicationRecheckInterval);
@@ -3669,6 +3685,7 @@ public class BlockManager {
     final int nodesToProcess = (int) Math.ceil(numlive
         * this.blocksInvalidateWorkPct);
 
+    // 核心方法，给每个要复制的block都创建一个复制任务
     int workFound = this.computeReplicationWork(blocksToProcess);
 
     // Update counters

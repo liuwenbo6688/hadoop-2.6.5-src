@@ -114,7 +114,7 @@ class AsyncLoggerSet {
    * Wait for a quorum of loggers to respond to the given call. If a quorum
    * can't be achieved, throws a QuorumException.
    * @param q the quorum call
-   * @param timeoutMs the number of millis to wait
+   * @param timeoutMs the number of millis to wait 默认就是20秒
    * @param operationName textual description of the operation, for logging
    * @return a map of successful results
    * @throws QuorumException if a quorum doesn't respond with success
@@ -123,7 +123,7 @@ class AsyncLoggerSet {
   <V> Map<AsyncLogger, V> waitForWriteQuorum(QuorumCall<AsyncLogger, V> q,
       int timeoutMs, String operationName) throws IOException {
 
-    //数量除以2+1的逻辑就在这里
+    // (数量/2 + 1)的逻辑就在这里
     int majority = getMajoritySize();
 
     try {
