@@ -35,8 +35,16 @@ import org.apache.hadoop.hdfs.server.common.StorageInfo;
 public class DatanodeRegistration extends DatanodeID
     implements NodeRegistration {
 
+  /**
+   * 存储信息
+   * namespace id，cluster id等信息
+   */
   private final StorageInfo storageInfo;
+
   private ExportedBlockKeys exportedKeys;
+  /**
+   * 版本号
+   */
   private final String softwareVersion;
 
   public DatanodeRegistration(DatanodeID dn, StorageInfo info,

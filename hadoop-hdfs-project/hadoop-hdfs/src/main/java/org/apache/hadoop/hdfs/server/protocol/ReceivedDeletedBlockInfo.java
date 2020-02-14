@@ -24,7 +24,9 @@ import org.apache.hadoop.hdfs.protocol.Block;
  * A data structure to store the blocks in an incremental block report. 
  */
 public class ReceivedDeletedBlockInfo {
+  // block 信息
   Block block;
+  // block的状态，标记 receive 还是 delete
   BlockStatus status;
   String delHints;
 

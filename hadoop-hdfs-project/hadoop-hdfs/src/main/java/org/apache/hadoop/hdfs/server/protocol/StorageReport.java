@@ -19,17 +19,18 @@ package org.apache.hadoop.hdfs.server.protocol;
 
 /**
  * Utilization report for a Datanode storage
+ * 一块存储的使用情况
  */
 public class StorageReport {
   private final DatanodeStorage storage;
   private final boolean failed;
-  //总的磁盘容量
+  // 总的磁盘容量
   private final long capacity;
   // 已经使用的磁盘空间
   private final long dfsUsed;
   // 剩余磁盘空间
   private final long remaining;
-  //
+  // datanode的 block使用多少空间
   private final long blockPoolUsed;
 
   public static final StorageReport[] EMPTY_ARRAY = {};

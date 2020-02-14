@@ -218,6 +218,9 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   final DataNode datanode;
   final DataStorage dataStorage;
   final FsVolumeList volumes;
+  /**
+   * 应该是datanode上每块盘对应一个 DatanodeStorage
+   */
   final Map<String, DatanodeStorage> storageMap;
   final FsDatasetAsyncDiskService asyncDiskService;
   final Daemon lazyWriter;

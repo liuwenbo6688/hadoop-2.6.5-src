@@ -45,10 +45,21 @@ import com.google.common.base.Joiner;
 @InterfaceAudience.Private
 public class StorageInfo {
   public int   layoutVersion;   // layout version of the storage data
+
+  /**
+   *
+   */
   public int   namespaceID;     // id of the file system
+
+  /**
+   * cluster ID
+   */
   public String clusterID;      // id of the cluster
   public long  cTime;           // creation time of the file system state
 
+  /*
+    节点类型
+   */
   protected final NodeType storageType; // Type of the node using this storage 
 
   protected static final String STORAGE_FILE_VERSION    = "VERSION";

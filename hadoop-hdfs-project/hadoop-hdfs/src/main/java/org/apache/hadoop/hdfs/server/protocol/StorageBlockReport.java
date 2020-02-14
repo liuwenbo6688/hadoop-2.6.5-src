@@ -22,6 +22,10 @@ package org.apache.hadoop.hdfs.server.protocol;
  * Block report for a Datanode storage
  */
 public class StorageBlockReport {
+
+  /**
+   * 就是上报每块磁盘对应的所有 block id数组
+   */
   private final DatanodeStorage storage;
   private final long[] blocks;
   

@@ -269,6 +269,8 @@ class BPServiceActor implements Runnable {
     } else { // send at next heartbeat
       lastBlockReport = lastHeartbeat - dnConf.blockReportInterval;
     }
+    // 就设置了一下标志位 resetBlockReportTime
+    // 转去 run方法 看怎么汇报block的
     resetBlockReportTime = true; // reset future BRs for randomness
   }
 
@@ -305,6 +307,7 @@ class BPServiceActor implements Runnable {
     ArrayList<StorageReceivedDeletedBlocks> reports =
         new ArrayList<StorageReceivedDeletedBlocks>(pendingIncrementalBRperStorage.size());
     synchronized (pendingIncrementalBRperStorage) {
+
       for (Map.Entry<DatanodeStorage, PerStoragePendingIncrementalBR> entry :
            pendingIncrementalBRperStorage.entrySet()) {
         final DatanodeStorage storage = entry.getKey();
@@ -313,9 +316,11 @@ class BPServiceActor implements Runnable {
         if (perStorageMap.getBlockInfoCount() > 0) {
           // Send newly-received and deleted blockids to namenode
           ReceivedDeletedBlockInfo[] rdbi = perStorageMap.dequeueBlockInfos();
+          // 添加到最近变化的 block 列表中
           reports.add(new StorageReceivedDeletedBlocks(storage, rdbi));
         }
       }
+
       sendImmediateIBR = false;
     }
 
@@ -327,8 +332,11 @@ class BPServiceActor implements Runnable {
     // Send incremental block reports to the Namenode outside the lock
     boolean success = false;
     try {
+      /**
+       * 发送远程请求
+       */
       bpNamenode.blockReceivedAndDeleted(bpRegistration,
-          bpos.getBlockPoolId(),
+          bpos.getBlockPoolId(),// bp
           reports.toArray(new StorageReceivedDeletedBlocks[reports.size()]));
       success = true;
     } finally {
@@ -486,6 +494,7 @@ class BPServiceActor implements Runnable {
 
   /**
    * Report the list blocks to the Namenode
+   * 全量上报一次所有的block信息
    * @return DatanodeCommands returned by the NN. May be null.
    * @throws IOException
    */
@@ -493,7 +502,7 @@ class BPServiceActor implements Runnable {
     // send block report if timer has expired.
     final long startTime = now();
 
-    //
+    // dfs.blockreport.intervalMsec  默认6 小时才会进行一次
     if (startTime - lastBlockReport <= dnConf.blockReportInterval) {
       return null;
     }
@@ -532,10 +541,16 @@ class BPServiceActor implements Runnable {
     long reportId = generateUniqueBlockReportId();
     try {
       if (totalBlockCount < dnConf.blockReportSplitThreshold) {
+
+        // 调用远程，全量上报block
         // Below split threshold, send all reports in a single message.
         DatanodeCommand cmd = bpNamenode.blockReport(
-            bpRegistration, bpos.getBlockPoolId(), reports,
-              new BlockReportContext(1, 0, reportId));
+                bpRegistration,
+                bpos.getBlockPoolId(),
+                // 全量的 block 信息
+                reports,
+                new BlockReportContext(1, 0, reportId));
+
         numRPCs = 1;
         numReportsSent = reports.length;
         if (cmd != null) {
@@ -577,6 +592,7 @@ class BPServiceActor implements Runnable {
                   (nCmds + " commands: " + Joiner.on("; ").join(cmds)))) +
           ".");
     }
+    // 调度下一次全量上报，就是改一下时间戳
     scheduleNextBlockReport(startTime);
     return cmds.size() == 0 ? null : cmds;
   }
@@ -632,12 +648,15 @@ class BPServiceActor implements Runnable {
   
   HeartbeatResponse sendHeartBeat() throws IOException {
     StorageReport[] reports =
+            // 直接在 FsDatasetImpl 中拿 存储的信息
         dn.getFSDataset().getStorageReports(bpos.getBlockPoolId());
+
     if (LOG.isDebugEnabled()) {
       LOG.debug("Sending heartbeat with " + reports.length +
                 " storage reports from service actor: " + this);
     }
 
+    // rpc 发送心跳
     return bpNamenode.sendHeartbeat(bpRegistration,
         reports,
         dn.getFSDataset().getCacheCapacity(),

@@ -519,11 +519,15 @@ public class DatanodeManager {
    * @param nodeInfo datanode descriptor.
    */
   private void removeDatanode(DatanodeDescriptor nodeInfo) {
-    assert namesystem.hasWriteLock();
 
-    // 和注册相反的操作
+    assert namesystem.hasWriteLock();// 要持有写锁
+
+    // 从心跳管理组件中删除
     heartbeatManager.removeDatanode(nodeInfo);
+
     blockManager.removeBlocksAssociatedTo(nodeInfo);
+
+    // 从网络拓扑中删除
     networktopology.remove(nodeInfo);
 
     decrementVersionCount(nodeInfo.getSoftwareVersion());
@@ -531,6 +535,7 @@ public class DatanodeManager {
     if (LOG.isDebugEnabled()) {
       LOG.debug("remove datanode " + nodeInfo);
     }
+    // 检查一下 是否要进入 safemode
     namesystem.checkSafeMode();
   }
 
@@ -566,6 +571,9 @@ public class DatanodeManager {
         if (d != null && isDatanodeDead(d)) {
           NameNode.stateChangeLog.info(
               "BLOCK* removeDeadDatanode: lost heartbeat from " + d);
+          /**
+           * 删除 datanode 相关的内存数据
+           */
           removeDatanode(d);
         }
       }
@@ -588,6 +596,7 @@ public class DatanodeManager {
       host2DatanodeMap.remove(datanodeMap.put(node.getDatanodeUuid(), node));
     }
 
+    // 网络拓扑结构中添加一个叶子节点
     networktopology.add(node); // may throw InvalidTopologyException
     host2DatanodeMap.add(node);
     checkIfClusterIsNowMultiRack(node);
@@ -995,11 +1004,13 @@ public class DatanodeManager {
         return;
       }
 
+
       /**
        * 创建一个 DatanodeDescriptor
        */
       DatanodeDescriptor nodeDescr 
         = new DatanodeDescriptor(nodeReg, NetworkTopology.DEFAULT_RACK);
+
       boolean success = false;
       try {
         // resolve network location
@@ -1014,7 +1025,7 @@ public class DatanodeManager {
         }
 
         /**
-         *
+         *  节点加到到网络拓扑中去
          */
         networktopology.add(nodeDescr);
         nodeDescr.setSoftwareVersion(nodeReg.getSoftwareVersion());
@@ -1022,6 +1033,7 @@ public class DatanodeManager {
         // register new datanode
         /**
          *  这才是注册datanode最核心的逻辑
+         *  其实就是加入各种内存的数据结构
          */
         addDatanode(nodeDescr);
         checkDecommissioning(nodeDescr);
@@ -1030,7 +1042,8 @@ public class DatanodeManager {
         // no need to update its timestamp
         // because its is done when the descriptor is created
         /**
-         *
+         * 把datanode加入到心跳管理组件中
+         * 很明显，heartbeatManager会对加入的datanode进行定期的心跳检测，判断节点存活状态
          */
         heartbeatManager.addDatanode(nodeDescr);
 
@@ -1399,6 +1412,7 @@ public class DatanodeManager {
         try {
           nodeinfo = getDatanode(nodeReg);
         } catch(UnregisteredNodeException e) {
+          // 如果还没有datanode的信息，很明显要发送一个重新注册的命令
           return new DatanodeCommand[]{RegisterCommand.REGISTER};
         }
         
@@ -1422,6 +1436,7 @@ public class DatanodeManager {
         // If we are in safemode, do not send back any recovery / replication
         // requests. Don't even drain the existing queue of work.
         if(namesystem.isInSafeMode()) {
+          // 如果还处在 安全模式，对datanode什么指令都不会下达
           return new DatanodeCommand[0];
         }
 

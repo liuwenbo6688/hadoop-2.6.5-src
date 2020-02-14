@@ -1173,13 +1173,16 @@ class NameNodeRpcServer implements NamenodeProtocols {
   }
 
 
+  /*
+     接收 datanode 的注册注册请求
+   */
   @Override // DatanodeProtocol
   public DatanodeRegistration registerDatanode(DatanodeRegistration nodeReg)
       throws IOException {
     checkNNStartup();
     verifySoftwareVersion(nodeReg);
       /**
-       *
+       * 注册请求
        */
     namesystem.registerDatanode(nodeReg);
     return nodeReg;

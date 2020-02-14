@@ -109,8 +109,15 @@ public class BlockManager {
 
   private final Namesystem namesystem;
 
+  /**
+   * datanode管理组件
+   */
   private final DatanodeManager datanodeManager;
+  /**
+   * 心跳管理组件
+   */
   private final HeartbeatManager heartbeatManager;
+
   private final BlockTokenSecretManager blockTokenSecretManager;
   
   private final PendingDataNodeMessages pendingDNMessages =

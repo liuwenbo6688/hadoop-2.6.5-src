@@ -68,9 +68,12 @@ class HeartbeatManager implements DatanodeStatistics {
     boolean avoidStaleDataNodesForWrite = conf.getBoolean(
         DFSConfigKeys.DFS_NAMENODE_AVOID_STALE_DATANODE_FOR_WRITE_KEY,
         DFSConfigKeys.DFS_NAMENODE_AVOID_STALE_DATANODE_FOR_WRITE_DEFAULT);
+
+    // 检查线程执行的周期  5分钟
     long recheckInterval = conf.getInt(
         DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY,
         DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_DEFAULT); // 5 min
+
     long staleInterval = conf.getLong(
         DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_INTERVAL_KEY,
         DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_INTERVAL_DEFAULT);// 30s
@@ -289,6 +292,7 @@ class HeartbeatManager implements DatanodeStatistics {
                   dm.isDatanodeDead(d) // 判断datanode是否宕机的逻辑 ，查过10分钟30秒
                   ) {
             stats.incrExpiredHeartbeats();
+            // 把第一个下线的节点赋值给 dead
             dead = d;
           }
           if (d.isStale(dm.getStaleInterval())) {
@@ -314,7 +318,9 @@ class HeartbeatManager implements DatanodeStatistics {
         dm.setNumStaleStorages(numOfStaleStorages);
       }
 
+      // 是否所有节点都存活
       allAlive = dead == null && failedStorage == null;
+
       if (dead != null) {
         // acquire the fsnamesystem lock, and then remove the dead node.
         namesystem.writeLock();
@@ -364,10 +370,12 @@ class HeartbeatManager implements DatanodeStatistics {
         try {
           final long now = Time.now();
           if (lastHeartbeatCheck + heartbeatRecheckInterval < now) {
+            // 每隔 5 分钟执行一次
             /**
              *  进行心跳检查
              */
             heartbeatCheck();
+            // 更新上衣检查的时间戳
             lastHeartbeatCheck = now;
           }
           if (blockManager.shouldUpdateBlockKey(now - lastBlockKeyUpdate)) {

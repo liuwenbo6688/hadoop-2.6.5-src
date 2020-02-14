@@ -32,6 +32,9 @@ import org.apache.hadoop.hdfs.server.protocol.StorageReport;
 /**
  * A Datanode has one or more storages. A storage in the Datanode is represented
  * by this class.
+ *
+ * 一个 datanode 可能有 1个或者多个 storages
+ * 每个 storage 就是 DatanodeStorageInfo
  */
 public class DatanodeStorageInfo {
   public static final DatanodeStorageInfo[] EMPTY_ARRAY = {};

@@ -51,7 +51,9 @@ import com.google.common.collect.Lists;
 @InterfaceAudience.LimitedPrivate({"HDFS", "MapReduce"})
 @InterfaceStability.Unstable
 public class NetworkTopology {
+  // 默认机架名称
   public final static String DEFAULT_RACK = "/default-rack";
+
   public final static int DEFAULT_HOST_LEVEL = 2;
   public static final Log LOG =
     LogFactory.getLog(NetworkTopology.class);

@@ -5226,8 +5226,10 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
    * @see org.apache.hadoop.hdfs.server.datanode.DataNode
    */
   void registerDatanode(DatanodeRegistration nodeReg) throws IOException {
-    writeLock();
+    writeLock(); // 要修改内存信息，所以加写锁
     try {
+
+      // 找 datanodeManager 进行注册
       getBlockManager().getDatanodeManager().registerDatanode(nodeReg);
       checkSafeMode();
     } finally {
@@ -5248,7 +5250,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   /**
    * The given node has reported in.  This method should:
    * 1) Record the heartbeat, so the datanode isn't timed out
+   * 汇报心跳，datanode 没有下线，是存活的
    * 2) Adjust usage stats for future block allocation
+   * 上报datanode使用率数据，方便namenode后面进行block分配
    * 
    * If a substantial amount of time passed since the last datanode 
    * heartbeat then request an immediate block report.  

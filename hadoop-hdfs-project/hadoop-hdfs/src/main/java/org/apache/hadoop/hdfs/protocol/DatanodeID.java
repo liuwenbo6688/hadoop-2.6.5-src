@@ -39,12 +39,31 @@ import com.google.common.annotations.VisibleForTesting;
 public class DatanodeID implements Comparable<DatanodeID> {
   public static final DatanodeID[] EMPTY_ARRAY = {};
 
+  /**
+   * ip 地址
+   */
   private String ipAddr;     // IP address
+  /**
+   * 主机名
+   */
   private String hostName;   // hostname claimed by datanode
   private String peerHostName; // hostname from the actual connection
+
+  /**
+   * 数据流的端口号
+   * 上传文件流使用
+   */
   private int xferPort;      // data streaming port
+
+  /**
+   * http 服务的端口
+   */
   private int infoPort;      // info server port
   private int infoSecurePort; // info server port
+
+  /**
+   * rpc服务的端口
+   */
   private int ipcPort;       // IPC server port
 
   /**
