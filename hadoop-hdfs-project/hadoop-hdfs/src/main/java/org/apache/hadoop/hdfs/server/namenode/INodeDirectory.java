@@ -79,6 +79,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
 
   /**
    * 树形的数据结构
+   * 子节点
    */
   private List<INode> children = null;
   

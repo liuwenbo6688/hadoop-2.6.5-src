@@ -77,6 +77,7 @@ class DataXceiverServer implements Runnable {
     * @param bandwidth Total amount of bandwidth can be used for balancing 
     */
    private BlockBalanceThrottler(long bandwidth, int maxThreads) {
+     //  bandwidth  指定的带宽  bytes/s
      super(bandwidth);
      this.maxThreads = maxThreads;
      LOG.info("Balancing bandwith is "+ bandwidth + " bytes/s");

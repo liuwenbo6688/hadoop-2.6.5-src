@@ -610,6 +610,7 @@ class BlockSender implements java.io.Closeable {
       throw ioeToSocketException(e);
     }
 
+    // 每次发送完一部分数据，就调用限流算法进行限流
     if (throttler != null) { // rebalancing so throttle
       throttler.throttle(packetLen);
     }

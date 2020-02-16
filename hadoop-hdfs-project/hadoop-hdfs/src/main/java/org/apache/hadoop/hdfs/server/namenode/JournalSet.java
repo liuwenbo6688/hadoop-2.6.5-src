@@ -247,6 +247,9 @@ public class JournalSet implements JournalManager {
     }, "starting log segment " + txId);
 
 
+    /**
+     *
+     */
     return new JournalSetOutputStream();
   }
   

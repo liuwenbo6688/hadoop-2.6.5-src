@@ -873,7 +873,16 @@ class NameNodeRpcServer implements NamenodeProtocols {
     return (src.length() <= MAX_PATH_LENGTH &&
             srcPath.depth() <= MAX_PATH_DEPTH);
   }
-    
+
+    /**
+     * 创建目录
+     * @param src 要创建的目录
+     * @param masked
+     * @param createParent 是否创建父目录
+     *
+     * @return
+     * @throws IOException
+     */
   @Override // ClientProtocol
   public boolean mkdirs(String src, FsPermission masked, boolean createParent)
       throws IOException {

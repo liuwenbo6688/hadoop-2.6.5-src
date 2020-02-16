@@ -27,9 +27,11 @@ import static org.apache.hadoop.util.Time.monotonicNow;
  */
 public class DataTransferThrottler {
   private final long period;          // period over which bw is imposed
+  // period*3
   private final long periodExtension; // Max period over which bw accumulates.
   private long bytesPerPeriod;  // total number of bytes can be sent in each period
   private long curPeriodStart;  // current period starting time
+  // 当前窗口内（500ms），还允许传输多少数据
   private long curReserve;      // remaining bytes can be sent in the period
   private long bytesAlreadyUsed;
 
@@ -49,7 +51,9 @@ public class DataTransferThrottler {
   public DataTransferThrottler(long period, long bandwidthPerSec) {
     this.curPeriodStart = monotonicNow();
     this.period = period;
+    // 每一个 Period（默认500ms） 周期传输的 字节
     this.curReserve = this.bytesPerPeriod = bandwidthPerSec*period/1000;
+    // 默认 1500ms
     this.periodExtension = period*3;
   }
 
@@ -95,11 +99,13 @@ public class DataTransferThrottler {
     if ( numOfBytes <= 0 ) {
       return;
     }
-
+    // 当前窗口内（500ms），还允许传输多少数据
     curReserve -= numOfBytes;
+    // 累计窗口内，传输了多少数据
     bytesAlreadyUsed += numOfBytes;
 
     while (curReserve <= 0) {
+      // 达到了窗口期内限流的阈值
       if (canceler != null && canceler.isCancelled()) {
         return;
       }
@@ -109,6 +115,7 @@ public class DataTransferThrottler {
       if ( now < curPeriodEnd ) {
         // Wait for next period so that curReserve can be increased.
         try {
+          // 等待一段时间
           wait( curPeriodEnd - now );
         } catch (InterruptedException e) {
           // Abort throttle and reset interrupted status to make sure other

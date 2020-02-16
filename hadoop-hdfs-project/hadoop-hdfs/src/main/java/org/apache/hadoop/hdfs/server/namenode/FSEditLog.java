@@ -559,11 +559,13 @@ public class FSEditLog implements LogsPurgeable {
   private long beginTransaction() {
     assert Thread.holdsLock(this);
     // get a new transactionId
+    // 获取新的 transactionId，自增
     txid++;
 
     //
     // record the transactionId when new data was written to the edits log
     //
+    // 放到自己本地的副本 ThreadLocal 中保存一份txid
     TransactionId id = myTransactionId.get();
     id.txid = txid;
     return now();
@@ -735,6 +737,7 @@ public class FSEditLog implements LogsPurgeable {
 
         /**
          * flush到磁盘上
+         * 这边是没有持有锁的
          */
         if (logStream != null) {
           logStream.flush();
@@ -1268,6 +1271,7 @@ public class FSEditLog implements LogsPurgeable {
  
   /**
    * Finalizes the current edit log and opens a new log segment.
+   * 结束当前的edits log 文件，重新代开一个新的edits log 日志段文件
    * @return the transaction id of the BEGIN_LOG_SEGMENT transaction
    * in the new log.
    */
@@ -1276,6 +1280,7 @@ public class FSEditLog implements LogsPurgeable {
     endCurrentLogSegment(true);
     
     long nextTxId = getLastWrittenTxId() + 1;
+    // 这里会调用
     startLogSegment(nextTxId, true);
     
     assert curSegmentTxId == nextTxId;

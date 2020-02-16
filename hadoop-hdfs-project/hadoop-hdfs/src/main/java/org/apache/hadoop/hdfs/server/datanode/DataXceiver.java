@@ -967,6 +967,7 @@ class DataXceiver extends Receiver implements Runnable {
     datanode.metrics.addBlockChecksumOp(elapsed());
   }
 
+  // datanode 会发送数据到另外一个 datanode，让他拷贝一个block数据
   @Override
   public void copyBlock(final ExtendedBlock block,
       final Token<BlockTokenIdentifier> blockToken) throws IOException {
@@ -997,7 +998,9 @@ class DataXceiver extends Receiver implements Runnable {
       // send status first
       writeSuccessWithChecksumInfo(blockSender, reply);
       // send block content to the target
-      long read = blockSender.sendBlock(reply, baseStream, 
+      //
+      long read = blockSender.sendBlock(reply, baseStream,
+                                        // 发送数据的时候，会传进去一个限流组件
                                         dataXceiverServer.balanceThrottler);
 
       datanode.metrics.incrBytesRead((int) read);

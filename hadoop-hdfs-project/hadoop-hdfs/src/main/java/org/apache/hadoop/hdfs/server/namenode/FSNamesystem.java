@@ -4398,13 +4398,17 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
      */
     writeLock();
     try {
-      checkOperation(OperationCategory.WRITE);   
+      checkOperation(OperationCategory.WRITE);
+      // 检查是否处于安全模式
       checkNameNodeSafeMode("Cannot create directory " + src);
-
-      src = resolvePath(src, pathComponents);
 
       /**
        *
+       */
+      src = resolvePath(src, pathComponents);
+
+      /**
+       * 关键代码入口
        */
       status = mkdirsInternal(pc, src, permissions, createParent);
 
@@ -4487,6 +4491,13 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     src = FSDirectory.normalizePath(src);
 
     /**
+     * 按照分隔符"/"把创建的全路径目录分隔开
+     * 例如 /user/hive/warehouse/data 目录
+     * 分成二维数组
+     *  user(byte[])
+     *  hive(byte[])
+     *  warehouse(byte[])
+     *  data(byte[])
      *
      */
     byte[][] components = INode.getPathComponents(src);
