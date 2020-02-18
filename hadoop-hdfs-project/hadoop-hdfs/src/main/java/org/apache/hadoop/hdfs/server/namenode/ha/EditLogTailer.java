@@ -219,6 +219,7 @@ public class EditLogTailer {
 
       /**
        * streams的来源？
+       *
        */
       Collection<EditLogInputStream> streams;
       try {
@@ -315,7 +316,7 @@ public class EditLogTailer {
           @Override
           public Object run() {
             /**
-             *
+             *  核心线程
              */
             doWork();
             return null;

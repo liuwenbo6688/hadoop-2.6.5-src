@@ -226,7 +226,7 @@ public class GetJournalEditServlet extends HttpServlet {
         editFileIn = new FileInputStream(editFile);
       }
 
-      // 流对口，还可以限流
+      // 流对拷，还可以限流
       DataTransferThrottler throttler = ImageServlet.getThrottler(conf);
       // send edits
       TransferFsImage.copyFileToStream(response.getOutputStream(), editFile,

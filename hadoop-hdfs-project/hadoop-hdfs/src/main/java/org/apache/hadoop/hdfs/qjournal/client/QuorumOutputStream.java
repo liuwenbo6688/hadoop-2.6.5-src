@@ -103,7 +103,7 @@ class QuorumOutputStream extends EditLogOutputStream {
       //    before it is sent.
       /**
        * 一次性把buffer里的数据发送到journal node里面去
-       * 以为是异步发送的，防止还没发送的时候，buffer里的数据被修改了
+       * 因为是异步发送的，防止还没发送的时候，buffer里的数据被修改了
        * 所有先把buffer里的数据copy到一个新的字节数组里面去
        */
       // 下面两行代码就是把buf里的数据先写到一个新的DataOutputBuffer里面去
