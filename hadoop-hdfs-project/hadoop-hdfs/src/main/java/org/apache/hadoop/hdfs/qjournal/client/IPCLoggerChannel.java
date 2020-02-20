@@ -377,7 +377,7 @@ public class IPCLoggerChannel implements AsyncLogger {
     
     ListenableFuture<Void> ret = null;
     try {
-      //单线程的线程池，异步发送请求
+      // 单线程的线程池，异步发送请求
       ret = singleThreadExecutor.submit(new Callable<Void>() {
         @Override
         public Void call() throws IOException {

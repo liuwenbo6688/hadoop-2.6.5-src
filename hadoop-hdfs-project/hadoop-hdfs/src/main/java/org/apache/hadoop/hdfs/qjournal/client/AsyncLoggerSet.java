@@ -256,11 +256,19 @@ class AsyncLoggerSet {
   public QuorumCall<AsyncLogger, Void> sendEdits(
       long segmentTxId, long firstTxnId, int numTxns, byte[] data) {
     Map<AsyncLogger, ListenableFuture<Void>> calls = Maps.newHashMap();
+
+    /**
+     *  遍历 AsyncLogger 调用  sendEdits方法，通过rpc调用发送到journal node上去
+     */
     for (AsyncLogger logger : loggers) {
 
-      // 对每个 AsyncLogger 调用  sendEdits方法，通过rpc调用发送到journal node上去
+      //  实现类 IPCLoggerChannel
       ListenableFuture<Void> future = 
         logger.sendEdits(segmentTxId, firstTxnId, numTxns, data);
+
+      /**
+       * 放入异步等待结果的 ListenableFuture map结构中
+       */
       calls.put(logger, future);
     }
     return QuorumCall.create(calls);

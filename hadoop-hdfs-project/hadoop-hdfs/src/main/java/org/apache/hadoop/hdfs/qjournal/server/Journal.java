@@ -73,6 +73,7 @@ import com.google.protobuf.TextFormat;
 
 /**
  * A JournalNode can manage journals for several clusters at once.
+ * 一个 JournalNode 能够同时为多个集群管理 journals
  * Each such journal is entirely independent despite being hosted by
  * the same JVM.
  */
@@ -84,7 +85,9 @@ public class Journal implements Closeable {
   // 落地到磁盘中去，所以使用 EditLogFileOutputStream
   private EditLogOutputStream curSegment;
 
+  // 当前段的 txid
   private long curSegmentTxId = HdfsConstants.INVALID_TXID;
+
   private long nextTxId = HdfsConstants.INVALID_TXID;
   private long highestWrittenTxId = 0;
   
@@ -359,10 +362,12 @@ public class Journal implements Closeable {
       abortCurSegment();
       throw e;
     }
-      
+
+    //  nextTxId 必须是这次写入的第一个txid， 表示是连续的
     checkSync(nextTxId == firstTxnId,
         "Can't write txid " + firstTxnId + " expecting nextTxId=" + nextTxId);
-    
+
+    // 结束 txid
     long lastTxnId = firstTxnId + numTxns - 1;
     if (LOG.isTraceEnabled()) {
       LOG.trace("Writing txid " + firstTxnId + "-" + lastTxnId);
@@ -379,10 +384,13 @@ public class Journal implements Closeable {
      * curSegment 用的是 EditLogFileOutputStream
      * 也是用的双缓冲
      */
+    // 第一步先写内存
     curSegment.writeRaw(records, 0, records.length);
+    // 第二步交换两块缓冲区
     curSegment.setReadyToFlush();
     Stopwatch sw = new Stopwatch();
     sw.start();
+    // 第三步 输入磁盘
     curSegment.flush(shouldFsync);
     sw.stop();
     
@@ -403,6 +411,7 @@ public class Journal implements Closeable {
     metrics.txnsWritten.incr(numTxns);
     
     highestWrittenTxId = lastTxnId;
+    // 记录下次需要写入的 txid
     nextTxId = lastTxnId + 1;
   }
 
@@ -497,6 +506,9 @@ public class Journal implements Closeable {
   /**
    * Start a new segment at the given txid. The previous segment
    * must have already been finalized.
+   *
+   * 开启一个新的段
+   * 先前的段已经被 finalized
    */
   public synchronized void startLogSegment(RequestInfo reqInfo, long txid,
       int layoutVersion) throws IOException {

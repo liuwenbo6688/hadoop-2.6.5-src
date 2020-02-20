@@ -27,6 +27,12 @@ import org.apache.hadoop.io.DataOutputBuffer;
 /**
  * EditLogOutputStream implementation that writes to a quorum of
  * remote journals.
+ *
+ * 写入大多数的远程 journal 节点
+ *
+ * write() : 方法暂时写入内存缓冲
+ * flushAndSync() : 进行真正的写入远程节点
+ *
  */
 class QuorumOutputStream extends EditLogOutputStream {
 
@@ -90,6 +96,7 @@ class QuorumOutputStream extends EditLogOutputStream {
     int numReadyBytes = buf.countReadyBytes();
     if (numReadyBytes > 0) {
       int numReadyTxns = buf.countReadyTxns();
+      // 刷新的内存buf里面的第一个 txid
       long firstTxToFlush = buf.getFirstReadyTxId();
 
       assert numReadyTxns > 0;

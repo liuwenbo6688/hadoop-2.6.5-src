@@ -45,6 +45,7 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
   private static final Log LOG = LogFactory.getLog(EditLogFileOutputStream.class);
   public static final int MIN_PREALLOCATION_LENGTH = 1024 * 1024;
 
+  // edits_inprogress 文件
   private File file;
   //存储本地 edit logs 的文件流
   private FileOutputStream fp; // file stream for storing edit logs
@@ -80,6 +81,7 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
             DFSConfigKeys.DFS_NAMENODE_EDITS_NOEDITLOGCHANNELFLUSH,
             DFSConfigKeys.DFS_NAMENODE_EDITS_NOEDITLOGCHANNELFLUSH_DEFAULT);
 
+    // edits_inprogress 文件
     file = name;
     doubleBuf = new EditsDoubleBuffer(size);
     RandomAccessFile rp;
@@ -89,6 +91,8 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
       rp = new RandomAccessFile(name, "rw");
     }
     fp = new FileOutputStream(rp.getFD()); // open for append
+
+    // 拿到filechannel ，并把 position 移动到文件尾部
     fc = rp.getChannel();
     fc.position(fc.size());
   }
@@ -111,6 +115,9 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
    * */
   @Override
   public void writeRaw(byte[] bytes, int offset, int length) throws IOException {
+    /**
+     *  写入双缓冲
+     */
     doubleBuf.writeRaw(bytes, offset, length);
   }
 

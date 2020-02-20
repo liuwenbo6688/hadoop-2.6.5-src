@@ -228,8 +228,10 @@ public class JournalNode implements Tool, Configurable, JournalNodeMXBean {
    * @return the file, which may or may not exist yet
    */
   private File getLogDir(String jid) {
+    // dfs.journalnode.edits.dir
     String dir = conf.get(DFSConfigKeys.DFS_JOURNALNODE_EDITS_DIR_KEY,
         DFSConfigKeys.DFS_JOURNALNODE_EDITS_DIR_DEFAULT);
+
     Preconditions.checkArgument(jid != null &&
         !jid.isEmpty(),
         "bad journal identifier: %s", jid);

@@ -147,7 +147,9 @@ public class EditsDoubleBuffer {
   }
   
   private static class TxnBuffer extends DataOutputBuffer {
+    // 缓冲区第一个 txid
     long firstTxId;
+    // 缓冲区总共的edits log数量
     int numTxns;
     private final Writer writer;
     

@@ -147,6 +147,7 @@ class JournalNodeRpcServer implements QJournalProtocol {
       int numTxns, byte[] records) throws IOException {
 
     jn.getOrCreateJournal(reqInfo.getJournalId())
+
        .journal(reqInfo, segmentTxId, firstTxnId, numTxns, records);
   }
   

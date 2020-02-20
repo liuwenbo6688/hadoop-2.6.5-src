@@ -73,6 +73,10 @@ public class FileJournalManager implements JournalManager {
   private static final Pattern EDITS_INPROGRESS_STALE_REGEX = Pattern.compile(
       NameNodeFile.EDITS_INPROGRESS.getName() + "_(\\d+).*(\\S+)");
 
+  /**
+   * 当前正在写入的文件
+   * edits_inprogress  文件
+   */
   private File currentInProgress = null;
 
   @VisibleForTesting
