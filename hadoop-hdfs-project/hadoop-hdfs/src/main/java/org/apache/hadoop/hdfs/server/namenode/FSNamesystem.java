@@ -1052,13 +1052,15 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       startOpt = StartupOption.REGULAR;
     }
     boolean success = false;
-    writeLock();
+    writeLock();// 加上写锁
     try {
       // We shouldn't be calling saveNamespace if we've come up in standby state.
       MetaRecoveryContext recovery = startOpt.createRecoveryContext();
 
       /**
+       * ************************
        * 在这个方法里加载了fsimage
+       * ************************
        */
       final boolean staleImage
           = fsImage.recoverTransitionRead(startOpt, this, recovery);

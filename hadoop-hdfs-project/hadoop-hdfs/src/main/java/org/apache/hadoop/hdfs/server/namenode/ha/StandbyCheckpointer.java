@@ -163,6 +163,9 @@ public class StandbyCheckpointer {
     thread.interrupt();
   }
 
+  /**
+   *  checkpoint 操作
+   */
   private void doCheckpoint() throws InterruptedException, IOException {
     assert canceler != null;
     final long txid;
@@ -285,6 +288,8 @@ public class StandbyCheckpointer {
       img.getStorage().getMostRecentCheckpointTxId();
   }
 
+
+  //----------------------------------------CheckpointerThread-----------------------------------------------------------------------------------
   private class CheckpointerThread extends Thread {
     private volatile boolean shouldRun = true;
     private volatile long preventCheckpointsUntil = 0;
@@ -430,6 +435,7 @@ public class StandbyCheckpointer {
       }
     }
   }
+  //----------------------------------------CheckpointerThread-----------------------------------------------------------------------------------
 
   @VisibleForTesting
   URL getActiveNNAddress() {

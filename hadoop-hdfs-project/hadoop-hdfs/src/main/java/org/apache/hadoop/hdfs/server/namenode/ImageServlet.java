@@ -485,6 +485,7 @@ public class ImageServlet extends HttpServlet {
                   return null;
                 }
 
+                // 拿到一个输入流
                 InputStream stream = request.getInputStream();
                 try {
                   long start = monotonicNow();
@@ -493,9 +494,11 @@ public class ImageServlet extends HttpServlet {
                    *  处理上传文件的请求，流对口接收
                    */
                   MD5Hash downloadImageDigest = TransferFsImage
-                      .handleUploadImageRequest(request, txid,
-                          nnImage.getStorage(), stream,
-                          parsedParams.getFileSize(), getThrottler(conf));
+                          .handleUploadImageRequest(request,
+                                          txid,
+                                          nnImage.getStorage(),
+                                          stream,
+                                          parsedParams.getFileSize(), getThrottler(conf));
 
 
                   /**

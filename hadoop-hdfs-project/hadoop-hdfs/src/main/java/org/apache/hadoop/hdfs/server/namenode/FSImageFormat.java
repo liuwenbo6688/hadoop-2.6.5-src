@@ -221,6 +221,7 @@ public class FSImageFormat {
         IOUtils.readFully(is, magic, 0, magic.length);
         if (Arrays.equals(magic, FSImageUtil.MAGIC_HEADER)) {
 
+          // 使用自定义格式的方式读取文件
           FSImageFormatProtobuf.Loader loader = new FSImageFormatProtobuf.Loader(
               conf, fsn, requireSameLayoutVersion);
 

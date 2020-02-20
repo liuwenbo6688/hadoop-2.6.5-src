@@ -129,9 +129,11 @@ public class TransferFsImage {
     }
 
     MD5Hash advertisedDigest = parseMD5Header(request);
-    //
+
+    // 读取文件
     MD5Hash hash = receiveFile(fileName, dstFiles, dstStorage, true,
         advertisedSize, advertisedDigest, fileName, stream, throttler);
+
     LOG.info("Downloaded file " + dstFiles.get(0).getName() + " size "
         + dstFiles.get(0).length() + " bytes.");
     return hash;
@@ -223,7 +225,7 @@ public class TransferFsImage {
     long startTime = Time.monotonicNow();
     try {
       /**
-       *
+       * 上传 fsimage 文件
        */
       uploadImage(url, conf, storage, nnf, txid, canceler);
     } catch (HttpPutFailedException e) {
@@ -256,6 +258,9 @@ public class TransferFsImage {
       throw new IOException("Could not find image with txid " + txId);
     }
 
+    // 请求路径："/imagetransfer"
+    // 目标：NameNodeHttpServer -》 ImageServlet
+    // 流对拷
     HttpURLConnection connection = null;
     try {
       URIBuilder uriBuilder = new URIBuilder(url.toURI());
@@ -522,7 +527,7 @@ public class TransferFsImage {
       byte[] buf = new byte[HdfsConstants.IO_FILE_BUFFER_SIZE];
       while (num > 0) {
         /**
-         *
+         * 不断的读数据
          */
         num = stream.read(buf);
         if (num > 0) {

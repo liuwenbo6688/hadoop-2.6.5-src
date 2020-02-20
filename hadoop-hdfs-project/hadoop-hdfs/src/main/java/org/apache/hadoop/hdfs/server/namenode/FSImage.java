@@ -1107,7 +1107,7 @@ public class FSImage implements Closeable {
     long imageTxId = getLastAppliedOrWrittenTxId();
     try {
       /**
-       *
+       * 将 fsimage 写入到磁盘上去
        */
       saveFSImageInAllDirs(source, nnf, imageTxId, canceler);
       storage.writeAll();
