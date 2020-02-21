@@ -697,7 +697,7 @@ public class FSImage implements Closeable {
 
 
     FSImageFile imageFile = null;
-    // 这里其实应该 imageFiles就只有一个最新的
+    // 这里其实应该 imageFiles 就只有一个最新的
     for (int i = 0; i < imageFiles.size(); i++) {
       try {
         imageFile = imageFiles.get(i);
@@ -709,32 +709,38 @@ public class FSImage implements Closeable {
       } catch (IOException ioe) {
         LOG.error("Failed to load image from " + imageFile, ioe);
         target.clear();
-        imageFile = null;
+        imageFile = null; // 出现异常，imageFile设为null
       }
     }
 
 
     // Failed to load any images, error out
-    if (imageFile == null) {
+    if (imageFile == null) {// 加载 image文件失败
       FSEditLog.closeAllStreams(editStreams);
       throw new IOException("Failed to load an FSImage file!");
     }
     prog.endPhase(Phase.LOADING_FSIMAGE);
+
+
+
     
     if (!rollingRollback) {
 
       /**
-       * 2.
-       * loadEdits()方法会加载fsimage之后那些edits log
+       * 2. 正常 (不是rollback) 就会走到这里执行
+       * loadEdits()方法会加载 fsimage之后那些edits log
+       *
        */
       long txnsAdvanced = loadEdits(editStreams, target, startOpt, recovery);
 
       needToSave |= needsResaveBasedOnStaleCheckpoint(imageFile.getFile(),
           txnsAdvanced);
+
       if (RollingUpgradeStartupOption.DOWNGRADE.matches(startOpt)) {
         // rename rollback image if it is downgrade
         renameCheckpoint(NameNodeFile.IMAGE_ROLLBACK, NameNodeFile.IMAGE);
       }
+
     } else {
       // Trigger the rollback for rolling upgrade. Here lastAppliedTxId equals
       // to the last txid in rollback fsimage.
@@ -877,24 +883,29 @@ public class FSImage implements Closeable {
     return loadEdits(editStreams, target, null, null);
   }
 
+  /**
+   * 加载 edits log
+   */
   private long loadEdits(Iterable<EditLogInputStream> editStreams,
       FSNamesystem target, StartupOption startOpt, MetaRecoveryContext recovery)
       throws IOException {
     LOG.debug("About to load edits:\n  " + Joiner.on("\n  ").join(editStreams));
     StartupProgress prog = NameNode.getStartupProgress();
-    prog.beginPhase(Phase.LOADING_EDITS);
+    prog.beginPhase(Phase.LOADING_EDITS); // 开始加载
     
     long prevLastAppliedTxId = lastAppliedTxId;  
     try {    
       FSEditLogLoader loader = new FSEditLogLoader(target, lastAppliedTxId);
       
       // Load latest edits
+      // 加载最新的 edits
       for (EditLogInputStream editIn : editStreams) {
         LOG.info("Reading " + editIn + " expecting start txid #" +
               (lastAppliedTxId + 1));
+        // 从  lastAppliedTxId + 1 开始读
         try {
           /**
-           * 核心的逻辑在这里
+           * 加载edits log核心的方法
            */
           loader.loadFSEdits(editIn, lastAppliedTxId + 1, startOpt, recovery);
         } finally {

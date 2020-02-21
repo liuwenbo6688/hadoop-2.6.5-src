@@ -132,15 +132,17 @@ public class FSEditLogLoader {
     StartupProgress prog = NameNode.getStartupProgress();
     Step step = createStartupProgressStep(edits);
     prog.beginStep(Phase.LOADING_EDITS, step);
-    fsNamesys.writeLock();
+    fsNamesys.writeLock(); // 也是要加写锁的，都是对内存结构的操作
     try {
       long startTime = now();
       FSImage.LOG.info("Start loading edits file " + edits.getName());
+
       /**
        *
        */
       long numEdits = loadEditRecords(edits, false, expectedStartingTxId,
           startOpt, recovery);
+
       FSImage.LOG.info("Edits file " + edits.getName() 
           + " of size " + edits.length() + " edits # " + numEdits 
           + " loaded in " + (now()-startTime)/1000 + " seconds");
