@@ -683,14 +683,16 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   private static void checkConfiguration(Configuration conf)
       throws IOException {
 
-    final Collection<URI> namespaceDirs =
-        FSNamesystem.getNamespaceDirs(conf);
-    final Collection<URI> editsDirs =
-        FSNamesystem.getNamespaceEditsDirs(conf);
-    final Collection<URI> requiredEditsDirs =
-        FSNamesystem.getRequiredNamespaceEditsDirs(conf);
-    final Collection<URI> sharedEditsDirs =
-        FSNamesystem.getSharedEditsDirs(conf);
+
+    // dfs.namenode.name.dir
+    final Collection<URI> namespaceDirs = FSNamesystem.getNamespaceDirs(conf);
+    //
+    final Collection<URI> editsDirs = FSNamesystem.getNamespaceEditsDirs(conf);
+    //
+    final Collection<URI> requiredEditsDirs = FSNamesystem.getRequiredNamespaceEditsDirs(conf);
+    // dfs.namenode.shared.edits.dir  ： 配置JournalNodes （jn）地址
+    final Collection<URI> sharedEditsDirs = FSNamesystem.getSharedEditsDirs(conf);
+
 
     for (URI u : requiredEditsDirs) {
       if (u.toString().compareTo(
@@ -744,6 +746,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
    */
   static FSNamesystem loadFromDisk(Configuration conf) throws IOException {
 
+    // 检查元数据目录配置的路径
     checkConfiguration(conf);
 
     /**
@@ -761,6 +764,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     // 实例化 FSNamesystem 对象，将fsImage对象放到FSNamesystem里面
     FSNamesystem namesystem = new FSNamesystem(conf, fsImage, false);
 
+    // 正常启动是 REGULAR
     StartupOption startOpt = NameNode.getStartupOption(conf);
     if (startOpt == StartupOption.RECOVER) {
       namesystem.setSafeMode(SafeModeAction.SAFEMODE_ENTER);
@@ -1067,8 +1071,6 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       MetaRecoveryContext recovery = startOpt.createRecoveryContext();
 
 
-
-
       /**
        * ************************************************
        * 在这个方法里加载了fsimage
@@ -1076,8 +1078,6 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
        */
       final boolean staleImage
           = fsImage.recoverTransitionRead(startOpt, this, recovery);
-
-
 
 
       if (RollingUpgradeStartupOption.ROLLBACK.matches(startOpt) ||

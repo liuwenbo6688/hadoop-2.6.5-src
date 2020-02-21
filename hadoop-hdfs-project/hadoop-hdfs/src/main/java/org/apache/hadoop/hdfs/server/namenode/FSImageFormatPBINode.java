@@ -191,6 +191,8 @@ public final class FSImageFormatPBINode {
     void loadINodeDirectorySection(InputStream in) throws IOException {
       final List<INodeReference> refList = parent.getLoaderContext()
           .getRefList();
+
+      // 在一个无限循环中，
       while (true) {
         INodeDirectorySection.DirEntry e = INodeDirectorySection.DirEntry
             .parseDelimitedFrom(in);
@@ -198,7 +200,9 @@ public final class FSImageFormatPBINode {
         if (e == null) {
           break;
         }
+        // p就是目录
         INodeDirectory p = dir.getInode(e.getParent()).asDirectory();
+
         for (long id : e.getChildrenList()) {
           INode child = dir.getInode(id);
           addToParent(p, child);
