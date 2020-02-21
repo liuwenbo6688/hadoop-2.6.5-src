@@ -561,6 +561,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
   private final CryptoCodec codec;
 
+  /**
+   * fsimage 加载成功的标志位
+   */
   private volatile boolean imageLoaded = false;
   private final Condition cond;
 
@@ -710,6 +713,12 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
             sharedEditsDirs.toString() + ".");
       }
     }
+
+
+    /**
+     * fsimage 和 editslog 的存储目录只有一个情况
+     * 会提示当心数据的丢失，由于空间不足等原因
+     */
 
     if (namespaceDirs.size() == 1) {
       LOG.warn("Only one image storage directory ("
@@ -1057,13 +1066,19 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       // We shouldn't be calling saveNamespace if we've come up in standby state.
       MetaRecoveryContext recovery = startOpt.createRecoveryContext();
 
+
+
+
       /**
-       * ************************
+       * ************************************************
        * 在这个方法里加载了fsimage
-       * ************************
+       * ************************************************
        */
       final boolean staleImage
           = fsImage.recoverTransitionRead(startOpt, this, recovery);
+
+
+
 
       if (RollingUpgradeStartupOption.ROLLBACK.matches(startOpt) ||
           RollingUpgradeStartupOption.DOWNGRADE.matches(startOpt)) {
@@ -1100,6 +1115,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       }
       writeUnlock();
     }
+    /**
+     * 设置 fsimage 加载成功的标志位
+     */
     imageLoadComplete();
   }
 

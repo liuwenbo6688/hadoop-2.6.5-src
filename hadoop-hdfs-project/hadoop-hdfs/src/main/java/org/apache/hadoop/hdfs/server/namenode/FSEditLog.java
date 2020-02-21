@@ -306,8 +306,10 @@ public class FSEditLog implements LogsPurgeable {
     }
     Preconditions.checkState(state == State.UNINITIALIZED ||
         state == State.CLOSED);
-    
+
+    // 初始化 journals
     initJournals(this.sharedEditsDirs);
+    //
     state = State.OPEN_FOR_READING;
   }
   

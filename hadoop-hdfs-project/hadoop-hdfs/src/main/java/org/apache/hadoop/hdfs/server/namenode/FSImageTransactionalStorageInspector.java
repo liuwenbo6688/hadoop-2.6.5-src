@@ -90,6 +90,10 @@ class FSImageTransactionalStorageInspector extends FSImageStorageInspector {
     // Check for a seen_txid file, which marks a minimum transaction ID that
     // must be included in our load plan.
     try {
+      /**
+       *  seen_txid 文件存储的 txid
+       *  seen_txid文件的意义在哪？
+       */
       maxSeenTxId = Math.max(maxSeenTxId, NNStorage.readTransactionIdFile(sd));
     } catch (IOException ioe) {
       LOG.warn("Unable to determine the max transaction ID seen by " + sd, ioe);
@@ -148,6 +152,7 @@ class FSImageTransactionalStorageInspector extends FSImageStorageInspector {
   @Override
   List<FSImageFile> getLatestImages() throws IOException {
     LinkedList<FSImageFile> ret = new LinkedList<FSImageFile>();
+
     for (FSImageFile img : foundImages) {
       if (ret.isEmpty()) {
         ret.add(img);
@@ -156,6 +161,8 @@ class FSImageTransactionalStorageInspector extends FSImageStorageInspector {
         if (cur.txId == img.txId) {
           ret.add(img);
         } else if (cur.txId < img.txId) {
+          // 取到最大的txid的那个fsimage文件
+          // 先清空list，再加入，也就是其实返回的list里面就只有一个 FSImageFile 对象
           ret.clear();
           ret.add(img);
         }

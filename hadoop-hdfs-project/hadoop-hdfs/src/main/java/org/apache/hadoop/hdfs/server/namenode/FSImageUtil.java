@@ -48,6 +48,12 @@ public final class FSImageUtil {
     return true;
   }
 
+  /**
+   * 拿出文件的summary
+   * @param file
+   * @return
+   * @throws IOException
+   */
   public static FileSummary loadSummary(RandomAccessFile file)
       throws IOException {
     final int FILE_LENGTH_FIELD_SIZE = 4;
@@ -63,15 +69,24 @@ public final class FSImageUtil {
     byte[] summaryBytes = new byte[summaryLength];
     file.readFully(summaryBytes);
 
+    /**
+     * 按照 protobuf 格式，读取文件的 summary
+     *
+     *
+       1、ondiskVersion
+       2、layoutVersion
+       3、codec
+       4、section
+     */
     FileSummary summary = FileSummary
         .parseDelimitedFrom(new ByteArrayInputStream(summaryBytes));
-    if (summary.getOndiskVersion() != FILE_VERSION) {
+    if (summary.getOndiskVersion() != FILE_VERSION) {//  ondiskVersion
       throw new IOException("Unsupported file version "
           + summary.getOndiskVersion());
     }
 
     if (!NameNodeLayoutVersion.supports(Feature.PROTOBUF_FORMAT,
-        summary.getLayoutVersion())) {
+        summary.getLayoutVersion())) { // layoutVersion
       throw new IOException("Unsupported layout version "
           + summary.getLayoutVersion());
     }

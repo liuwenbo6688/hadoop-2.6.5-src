@@ -190,7 +190,14 @@ public class FSImageFormat {
     long getLoadedImageTxId();
   }
 
+
+  /**
+   * 只是一个加载文件的委托代理类
+   * 真正的加载是通过AbstractLoader对象 impl
+   */
   static class LoaderDelegator implements AbstractLoader {
+
+    // 真正的加载是通过AbstractLoader对象 impl
     private AbstractLoader impl;
     private final Configuration conf;
     private final FSNamesystem fsn;
@@ -210,6 +217,12 @@ public class FSImageFormat {
       return impl.getLoadedImageTxId();
     }
 
+    /**
+     *
+     * @param file
+     * @param requireSameLayoutVersion
+     * @throws IOException
+     */
     public void load(File file, boolean requireSameLayoutVersion)
         throws IOException {
       Preconditions.checkState(impl == null, "Image already loaded!");
@@ -218,15 +231,24 @@ public class FSImageFormat {
       try {
         is = new FileInputStream(file);
         byte[] magic = new byte[FSImageUtil.MAGIC_HEADER.length];
+
+        // 先读取一个magic数据，校验使用的
         IOUtils.readFully(is, magic, 0, magic.length);
+
         if (Arrays.equals(magic, FSImageUtil.MAGIC_HEADER)) {
+          // 如果 magic 校验通过
 
           // 使用自定义格式的方式读取文件
           FSImageFormatProtobuf.Loader loader = new FSImageFormatProtobuf.Loader(
               conf, fsn, requireSameLayoutVersion);
 
           impl = loader;
+
+          /**
+           * 交给真正的 FSImageFormatProtobuf 进行 load
+           */
           loader.load(file);
+
         } else {
           Loader loader = new Loader(conf, fsn);
           impl = loader;

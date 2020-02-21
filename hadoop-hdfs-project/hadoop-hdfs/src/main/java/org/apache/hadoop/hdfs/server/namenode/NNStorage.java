@@ -440,6 +440,7 @@ public class NNStorage extends Storage implements Closeable,
 
   /**
    * Set the transaction ID and time of the last checkpoint
+   * 记录一下最近checkpoint的txid 和时间戳
    * 
    * @param txid transaction id of the last checkpoint
    * @param time time of the last checkpoint, in millis since the epoch
@@ -1009,6 +1010,7 @@ public class NNStorage extends Storage implements Closeable,
     // newest image file and edit file
     for (Iterator<StorageDirectory> it = dirIterator(); it.hasNext();) {
       StorageDirectory sd = it.next();
+      //
       inspector.inspectDirectory(sd);
     }
   }

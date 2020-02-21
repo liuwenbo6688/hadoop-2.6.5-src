@@ -90,6 +90,7 @@ public class FSImage implements Closeable {
   /**
    * The last transaction ID that was either loaded from an image
    * or loaded by loading edits files.
+   * 最大的txid ， 既可以是 fsimage 或者 edits 文件加载的
    */
   protected long lastAppliedTxId = 0;
 
@@ -185,7 +186,11 @@ public class FSImage implements Closeable {
       throws IOException {
     assert startOpt != StartupOption.FORMAT : 
       "NameNode formatting should be performed before reading the image";
-    
+
+    /**
+     * 就是拿到 Image 和  Editslog 的存储日志的目录
+     * 实现都是琐碎的代码，没必要进去看了
+     */
     Collection<URI> imageDirs = storage.getImageDirectories();
     Collection<URI> editsDirs = editLog.getEditURIs();
 
@@ -602,8 +607,11 @@ public class FSImage implements Closeable {
   private boolean loadFSImage(FSNamesystem target, StartupOption startOpt,
       MetaRecoveryContext recovery)
       throws IOException {
+
+    // 是否是 rollback
     final boolean rollingRollback
         = RollingUpgradeStartupOption.ROLLBACK.matches(startOpt);
+
     final EnumSet<NameNodeFile> nnfs;
     if (rollingRollback) {
       // if it is rollback of rolling upgrade, only load from the rollback image
@@ -612,15 +620,27 @@ public class FSImage implements Closeable {
       // otherwise we can load from both IMAGE and IMAGE_ROLLBACK
       nnfs = EnumSet.of(NameNodeFile.IMAGE, NameNodeFile.IMAGE_ROLLBACK);
     }
+
+    /**
+     *
+     */
     final FSImageStorageInspector inspector = storage
         .readAndInspectDirs(nnfs, startOpt);
 
     isUpgradeFinalized = inspector.isUpgradeFinalized();
+    /**
+     *  拿到最近的 fsimage 文件
+     */
     List<FSImageFile> imageFiles = inspector.getLatestImages();
 
     StartupProgress prog = NameNode.getStartupProgress();
     prog.beginPhase(Phase.LOADING_FSIMAGE);
+
+    /**
+     * fsimage可操作的 java File对象
+     */
     File phaseFile = imageFiles.get(0).getFile();
+
     prog.setFile(Phase.LOADING_FSIMAGE, phaseFile.getAbsolutePath());
     prog.setSize(Phase.LOADING_FSIMAGE, phaseFile.length());
     boolean needToSave = inspector.needToSave();
@@ -628,7 +648,8 @@ public class FSImage implements Closeable {
     Iterable<EditLogInputStream> editStreams = null;
 
     /**
-     *
+     *  初始化editlog ，打开可写看
+     *  不管是本地写文件 还是 远程写journal
      */
     initEditLog(startOpt);
 
@@ -658,6 +679,9 @@ public class FSImage implements Closeable {
       editStreams = FSImagePreTransactionalStorageInspector
         .getEditLogStreams(storage);
     }
+
+
+    // 设置：dfs.namenode.max.op.size
     int maxOpSize = conf.getInt(DFSConfigKeys.DFS_NAMENODE_MAX_OP_SIZE_KEY,
         DFSConfigKeys.DFS_NAMENODE_MAX_OP_SIZE_DEFAULT);
     for (EditLogInputStream elis : editStreams) {
@@ -673,6 +697,7 @@ public class FSImage implements Closeable {
 
 
     FSImageFile imageFile = null;
+    // 这里其实应该 imageFiles就只有一个最新的
     for (int i = 0; i < imageFiles.size(); i++) {
       try {
         imageFile = imageFiles.get(i);
@@ -745,6 +770,10 @@ public class FSImage implements Closeable {
     StorageDirectory sdForProperties = imageFile.sd;
     storage.readProperties(sdForProperties, startupOption);
 
+
+    /**
+     * 根据不同的情况分支，最终都是 loadFSImage 方法
+     */
     if (NameNodeLayoutVersion.supports(
         LayoutVersion.Feature.TXID_BASED_LAYOUT, getLayoutVersion())) {
       // For txid-based layout, we should have a .md5 file
@@ -752,6 +781,9 @@ public class FSImage implements Closeable {
       boolean isRollingRollback = RollingUpgradeStartupOption.ROLLBACK
           .matches(startupOption);
 
+      /**
+       *
+       */
       loadFSImage(imageFile.getFile(), target, recovery, isRollingRollback);
 
     } else if (NameNodeLayoutVersion.supports(
@@ -774,6 +806,9 @@ public class FSImage implements Closeable {
     } else {
 
       // We don't have any record of the md5sum
+      /**
+       *
+       */
       loadFSImage(imageFile.getFile(), null, target, recovery, false);
 
     }
@@ -808,7 +843,8 @@ public class FSImage implements Closeable {
       editLog.recoverUnclosedStreams();
     } else {
       // This NN is HA and we're not doing an upgrade.
-      //
+      // 开启了namenode的HA高可用， 不是一个升级的操作
+      // 正常流畅就是走这里咯
       editLog.initSharedJournalsForRead();
     }
   }
@@ -951,20 +987,35 @@ public class FSImage implements Closeable {
   /**
    * Load in the filesystem image from file. It's a big list of
    * filenames and blocks.
+   *
+   * 加载 元数据的镜像文件（fsimage）
+   *
+   * 大量的的文件名 和 block 的列表
    */
-  private void loadFSImage(File curFile, MD5Hash expectedMd5,
-      FSNamesystem target, MetaRecoveryContext recovery,
+  private void loadFSImage(File curFile, // 这就是 fsimage 文件
+                           MD5Hash expectedMd5,
+                           FSNamesystem target,
+                           MetaRecoveryContext recovery,
       boolean requireSameLayoutVersion) throws IOException {
     // BlockPoolId is required when the FsImageLoader loads the rolling upgrade
     // information. Make sure the ID is properly set.
+    // 一个 block pool 针对一组 NameNode
     target.setBlockPoolId(this.getBlockPoolID());
 
-    FSImageFormat.LoaderDelegator loader = FSImageFormat.newLoader(conf, target);
+
+    // ========================真正加载的image的方法在这里=============================
     /**
      *  到了底层的加载文件数据的部分了
      */
+    FSImageFormat.LoaderDelegator loader = FSImageFormat.newLoader(conf, target);
+    // 加载文件到内存
     loader.load(curFile, requireSameLayoutVersion);
 
+    // =============================================================================
+
+    /**
+     * 进行读取后的md5校验，保证读取的正确性
+     */
     // Check that the image digest we loaded matches up with what
     // we expected
     MD5Hash readImageMd5 = loader.getLoadedImageMd5();
@@ -975,9 +1026,12 @@ public class FSImage implements Closeable {
           " but expecting " + expectedMd5);
     }
 
+
+
     long txId = loader.getLoadedImageTxId();
     LOG.info("Loaded image for txid " + txId + " from " + curFile);
     lastAppliedTxId = txId;
+    // 设置最近一次checkpoint的txid 和时间戳
     storage.setMostRecentCheckpointInfo(txId, curFile.lastModified());
   }
 

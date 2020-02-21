@@ -73,6 +73,8 @@ import com.google.protobuf.CodedOutputStream;
 
 /**
  * Utility class to read / write fsimage in protobuf format.
+ *
+ * 通过protobuf格式读写fsimage的工具类
  */
 @InterfaceAudience.Private
 public final class FSImageFormatProtobuf {
@@ -176,12 +178,20 @@ public final class FSImageFormatProtobuf {
 
     void load(File file) throws IOException {
       long start = Time.monotonicNow();
+      // 计算文件的 MD5
       imgDigest = MD5FileUtils.computeMd5ForFile(file);
+
       RandomAccessFile raFile = new RandomAccessFile(file, "r");
       FileInputStream fin = new FileInputStream(file);
       try {
+
+        /**
+         *  加载方法
+         */
         loadInternal(raFile, fin);
+
         long end = Time.monotonicNow();
+        //加载结束，统计加载时间
         LOG.info("Loaded FSImage in {} seconds.", (end - start) / 1000);
       } finally {
         fin.close();
@@ -189,11 +199,24 @@ public final class FSImageFormatProtobuf {
       }
     }
 
+    /**
+     * 加载文件的核心方法：
+     *
+     * FSImage文件内容总体格式需要了解一下，否则很难搞明白
+     */
     private void loadInternal(RandomAccessFile raFile, FileInputStream fin)
         throws IOException {
       if (!FSImageUtil.checkFileFormat(raFile)) {
         throw new IOException("Unrecognized file format");
       }
+
+      /**
+       * 读取  Summary
+       1、ondiskVersion
+       2、layoutVersion
+       3、codec
+       4、section
+       */
       FileSummary summary = FSImageUtil.loadSummary(raFile);
       if (requireSameLayoutVersion && summary.getLayoutVersion() !=
           HdfsConstants.NAMENODE_LAYOUT_VERSION) {
@@ -204,13 +227,24 @@ public final class FSImageFormatProtobuf {
 
       FileChannel channel = fin.getChannel();
 
+      // 感觉应该是  INode加载到内存的组件了
       FSImageFormatPBINode.Loader inodeLoader = new FSImageFormatPBINode.Loader(
           fsn, this);
+
+      // Snapshot ?
       FSImageFormatPBSnapshot.Loader snapshotLoader = new FSImageFormatPBSnapshot.Loader(
           fsn, this);
 
+
+      /**
+       * Summary的section只的是每个section的 起始偏移量 和 length
+       *  Section.getName();
+          Section.getOffset();
+          Section.getLength();
+       */
       ArrayList<FileSummary.Section> sections = Lists.newArrayList(summary
           .getSectionsList());
+
       Collections.sort(sections, new Comparator<FileSummary.Section>() {
         @Override
         public int compare(FileSummary.Section s1, FileSummary.Section s2) {
@@ -245,24 +279,43 @@ public final class FSImageFormatProtobuf {
         String n = s.getName();
 
         switch (SectionName.fromString(n)) {
+          /**
+           * 这部分的大体意思就是，从section的名字、起始便宜量、长度，去解析每个section的数据
+           * NS_INFO namespace的信息
+           * INODE 一看就是和inode相关的部分
+           * INODE_DIR 一看就是inode 目录部分
+           * ......
+           */
         case NS_INFO:
           loadNameSystemSection(in);
           break;
         case STRING_TABLE:
           loadStringTableSection(in);
           break;
-        case INODE: {
-          currentStep = new Step(StepType.INODES);
-          prog.beginStep(Phase.LOADING_FSIMAGE, currentStep);
-          inodeLoader.loadINodeSection(in);
-        }
+
+          /**
+           * INODE  ：加载inode数据到 FSDirectory 的  inodeMap 数据结构中
+           */
+          case INODE: {
+            currentStep = new Step(StepType.INODES);
+            prog.beginStep(Phase.LOADING_FSIMAGE, currentStep);
+            // 加载 inode Section
+            inodeLoader.loadINodeSection(in);
+          }
           break;
+
         case INODE_REFERENCE:
           snapshotLoader.loadINodeReferenceSection(in);
           break;
-        case INODE_DIR:
-          inodeLoader.loadINodeDirectorySection(in);
-          break;
+
+          /**
+           *  INODE_DIR： 在这里才是组织树形的内存结构呢
+           */
+          case INODE_DIR:
+            inodeLoader.loadINodeDirectorySection(in);
+            break;
+
+
         case FILES_UNDERCONSTRUCTION:
           inodeLoader.loadFilesUnderConstructionSection(in);
           break;
@@ -293,6 +346,9 @@ public final class FSImageFormatProtobuf {
         }
       }
     }
+
+
+
 
     private void loadNameSystemSection(InputStream in) throws IOException {
       NameSystemSection s = NameSystemSection.parseDelimitedFrom(in);

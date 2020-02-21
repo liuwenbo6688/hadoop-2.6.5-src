@@ -210,19 +210,33 @@ public final class FSImageFormatPBINode {
       }
     }
 
+    /**
+     * 其实看看这个方法就大致能了解是怎么回事
+     * @param in
+     * @throws IOException
+     */
     void loadINodeSection(InputStream in) throws IOException {
       INodeSection s = INodeSection.parseDelimitedFrom(in);
       fsn.resetLastInodeId(s.getLastInodeId());
       LOG.info("Loading " + s.getNumInodes() + " INodes.");
+
       for (int i = 0; i < s.getNumInodes(); ++i) {
         INodeSection.INode p = INodeSection.INode.parseDelimitedFrom(in);
         if (p.getId() == INodeId.ROOT_INODE_ID) {
+          /**
+           * root节点
+           */
           loadRootINode(p);
         } else {
+          /**
+           * 非 root 节点
+           */
           INode n = loadINode(p);
           dir.addToInodeMap(n);
         }
       }
+
+
     }
 
     /**
@@ -272,10 +286,13 @@ public final class FSImageFormatPBINode {
     private INode loadINode(INodeSection.INode n) {
       switch (n.getType()) {
       case FILE:
+        //  INodeFile
         return loadINodeFile(n);
       case DIRECTORY:
+        // INodeDirectory
         return loadINodeDirectory(n, parent.getLoaderContext());
       case SYMLINK:
+        // INodeSymlink
         return loadINodeSymlink(n);
       default:
         break;

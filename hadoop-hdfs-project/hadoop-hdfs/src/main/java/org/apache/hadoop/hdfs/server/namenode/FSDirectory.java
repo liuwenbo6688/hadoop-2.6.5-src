@@ -2237,6 +2237,9 @@ public class FSDirectory implements Closeable {
    */
   public final void addToInodeMap(INode inode) {
     if (inode instanceof INodeWithAdditionalFields) {
+      /**
+       * 加入 inodeMap 数据结构中，这个结构之前并没有在意
+       */
       inodeMap.put(inode);
       if (!inode.isSymlink()) {
         final XAttrFeature xaf = inode.getXAttrFeature();
