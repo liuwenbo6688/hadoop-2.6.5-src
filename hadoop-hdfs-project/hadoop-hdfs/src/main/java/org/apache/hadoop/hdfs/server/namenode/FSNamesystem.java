@@ -603,6 +603,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
   /**
    * Block until the object is imageLoaded to be used.
+   * 如果是namenode刚启动的时候，你发送上传文件的请求，那么肯定要等待 namenode 加载完fsimage才能继续往下执行
+   *
+   * namenode启动元数据加载完成后，imageLoaded会别置为 true
    */
   void waitForLoadingFSImage() {
     if (!imageLoaded) {
@@ -2616,7 +2619,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     
     try {
       /**
-       *
+       *  创建文件
        */
       status = startFileInt(src, permissions, holder, clientMachine, flag,
           createParent, replication, blockSize, supportedVersions,
@@ -2661,7 +2664,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     if (!DFSUtil.isValidName(src)) {
       throw new InvalidPathException(src);
     }
-    blockManager.verifyReplication(src, replication, clientMachine);
+    blockManager.verifyReplication(src, replication, clientMachine);// 校验 replication
 
     boolean skipSync = false;
     HdfsFileStatus stat = null;
@@ -2734,12 +2737,26 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       checkNameNodeSafeMode("Cannot create file" + src);
       src = resolvePath(src, pathComponents);
 
+
       /**
-       *  跟进去
+       *  跟进去，创建文件
+       *  就是内存操作
        */
-      toRemoveBlocks = startFileInternal(pc, src, permissions, holder, 
-          clientMachine, create, overwrite, createParent, replication, 
-          blockSize, isLazyPersist, suite, protocolVersion, edek, logRetryCache);
+      toRemoveBlocks = startFileInternal(pc,
+              src,
+              permissions,
+              holder,
+              clientMachine,
+              create,
+              overwrite,
+              createParent,
+              replication,
+              blockSize,
+              isLazyPersist,
+              suite,
+              protocolVersion,
+              edek,
+              logRetryCache);
 
       stat = dir.getFileInfo(src, false,
           FSDirectory.isReservedRawName(srcArg), true);
@@ -2839,7 +2856,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         }
       } else {
 
-        if (overwrite) { //如果是覆盖写？
+        if (overwrite) { // 如果是覆盖写？
           toRemoveBlocks = new BlocksMapUpdateInfo();
           List<INode> toRemoveINodes = new ChunkedArrayList<INode>();
           long ret = dir.delete(src, toRemoveBlocks, toRemoveINodes, now());

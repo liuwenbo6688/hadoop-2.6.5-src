@@ -582,6 +582,9 @@ class NameNodeRpcServer implements NamenodeProtocols {
     return namesystem.getServerDefaults();
   }
 
+    /**
+     * 创建文件
+     */
   @Override // ClientProtocol
   public HdfsFileStatus create(String src, FsPermission masked,
       String clientName, EnumSetWritable<CreateFlag> flag,

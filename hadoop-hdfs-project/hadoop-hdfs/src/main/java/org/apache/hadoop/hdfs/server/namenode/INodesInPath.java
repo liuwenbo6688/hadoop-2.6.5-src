@@ -33,6 +33,8 @@ import com.google.common.base.Preconditions;
 
 /**
  * Contains INodes information resolved from a given path.
+ *
+ * 从路径中解析出包含的INodes的信息
  */
 public class INodesInPath {
   public static final Log LOG = LogFactory.getLog(INodesInPath.class);

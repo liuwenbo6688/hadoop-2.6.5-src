@@ -32,6 +32,8 @@ import org.apache.hadoop.fs.ChecksumException;
 /**
  * This class provides interface and utilities for processing checksums for
  * DFS data transfers.
+ *
+ * 提供了处理 “校验和” 的一些接口和工具类
  */
 @InterfaceAudience.LimitedPrivate({"HDFS", "MapReduce"})
 @InterfaceStability.Evolving

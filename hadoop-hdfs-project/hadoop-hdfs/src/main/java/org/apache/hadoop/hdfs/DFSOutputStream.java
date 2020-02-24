@@ -109,10 +109,18 @@ import com.google.common.cache.RemovalNotification;
 /****************************************************************
  * DFSOutputStream creates files from a stream of bytes.
  *
+ *
+ *
  * The client application writes data that is cached internally by
  * this stream. Data is broken up into packets, each packet is
  * typically 64K in size. A packet comprises of chunks. Each chunk
  * is typically 512 bytes and has an associated checksum with it.
+ *
+ *  DFSOutputStream 从字节流的形式创建文件
+ *
+ * 数据文件被拆成很多的 packet，每个packet 64KB
+ * 一个packet由很多 chunks 组成，每个chunk512字节，并且附带一个checksum（校验和）
+ *
  *
  * When a client application fills up the currentPacket, it is
  * enqueued into dataQueue.  The DataStreamer thread picks up
@@ -122,6 +130,12 @@ import com.google.common.cache.RemovalNotification;
  * successful ack for a packet is received from all datanodes, the
  * ResponseProcessor removes the corresponding packet from the
  * ackQueue.
+ *
+ * 当客户端写完当前的 packet，会放入 dataQueue队列
+ * 由DataStreamer线程从dataQueue队列拿出来，发送给管道中的第一个datanode，然后放入待确认的队列ackQueue
+ *
+ * 当ResponseProcessor线程接收datanode的ack确认，当收到所有datanode 的packet确认，就把它从ackQueue中移除
+ *
  *
  * In case of error, all outstanding packets and moved from
  * ackQueue. A new pipeline is setup by eliminating the bad
@@ -153,17 +167,34 @@ public class DFSOutputStream extends FSOutputSummer
   private final long blockSize;
   /** Only for DataTransferProtocol.writeBlock(..) */
   private final DataChecksum checksum4WriteBlock;
-  private final int bytesPerChecksum; 
+  /**
+   *  ？？
+   */
+  private final int bytesPerChecksum;
 
+
+  /**
+   * dataQueue 和  ackQueue都需要持有 dataQueue的锁才能操作
+   */
   // both dataQueue and ackQueue are protected by dataQueue lock
   private final LinkedList<Packet> dataQueue = new LinkedList<Packet>();
 
+  // 响应队列，等待datanode返回上传文件成功的ack信息
   private final LinkedList<Packet> ackQueue = new LinkedList<Packet>();
+
+  /**
+   * 当前正在写的 packet
+   */
   private Packet currentPacket = null;
 
 
   /**
-   * 就是一个 Thread
+   * DataStreamer 是一个核心线程，专门负责将数据上传到datanode的核心线程
+   * 他是负责一个数据管道（pipeline），将数据（packet）发送给 datanodes
+   * 他会从namenode获取一个blockid以及这些block在哪些datanode上，这样他才知道往哪个datanode上写数据
+   * 他发送的每个packet都有一个序号
+   * 如果一个block里的所有packet数据包都成功发送给了datanode，而且所有的datanode都收到了这个block
+   * DataStreamer就会关闭当前的这个block，说明这个block已经上传成功了
    */
   private DataStreamer streamer;
 
@@ -172,8 +203,17 @@ public class DFSOutputStream extends FSOutputSummer
   private long lastQueuedSeqno = -1;
   private long lastAckedSeqno = -1;
   private long bytesCurBlock = 0; // bytes written in current block
+
+  /**
+   * 一个packet的大小
+   */
   private int packetSize = 0; // write packet size, not including the header.
+
+  /**
+   *  每个packet中有多少个chunk
+   */
   private int chunksPerPacket = 0;
+
   private final AtomicReference<IOException> lastException = new AtomicReference<IOException>();
   private long artificialSlowdown = 0;
   private long lastFlushOffset = 0; // offset when flush was invoked
@@ -1764,12 +1804,19 @@ public class DFSOutputStream extends FSOutputSummer
     super(getChecksum4Compute(checksum, stat));
     this.dfsClient = dfsClient;
     this.src = src;
+
+    /**
+     * 拿到从namenode创建内存目录树元数据，返回的文件信息
+     * 包括， fileId, 块大小， 副本因子数
+     */
     this.fileId = stat.getFileId();
     // 配置的多大MB一个block
     this.blockSize = stat.getBlockSize();
     // 一个block几个副本
     this.blockReplication = stat.getReplication();
     this.fileEncryptionInfo = stat.getFileEncryptionInfo();
+
+
     this.progress = progress;
     this.cachingStrategy = new AtomicReference<CachingStrategy>(
         dfsClient.getDefaultWriteCachingStrategy());
@@ -1796,9 +1843,13 @@ public class DFSOutputStream extends FSOutputSummer
   }
 
   /** Construct a new output stream for creating a file. */
-  private DFSOutputStream(DFSClient dfsClient, String src, HdfsFileStatus stat,
-      EnumSet<CreateFlag> flag, Progressable progress,
-      DataChecksum checksum, String[] favoredNodes) throws IOException {
+  private DFSOutputStream(DFSClient dfsClient,
+                          String src,
+                          HdfsFileStatus stat, // 前一步通过namenode创建的文件内存目录树，返回的文件状态
+                          EnumSet<CreateFlag> flag,
+                          Progressable progress,
+                          DataChecksum checksum,
+                          String[] favoredNodes) throws IOException {
 
     /**
      * 重载
@@ -1815,7 +1866,9 @@ public class DFSOutputStream extends FSOutputSummer
      * chunk是516字节
      * 一个packet数据包里还有多个checksum，校验块，每个是512字节
      */
-    computePacketChunkSize(dfsClient.getConf().writePacketSize, bytesPerChecksum);
+    computePacketChunkSize(
+            dfsClient.getConf().writePacketSize, // 每个packet数据包的大小，默认是 64 KB
+            bytesPerChecksum);
 
     Span traceSpan = null;
     if (Trace.isTracing()) {
@@ -1888,7 +1941,7 @@ public class DFSOutputStream extends FSOutputSummer
     }
     Preconditions.checkNotNull(stat, "HdfsFileStatus should not be null!");
 
-    //核心的输出流组件
+    // 初始化核心的输出流组件
     final DFSOutputStream out = new DFSOutputStream(dfsClient, src, stat,
         flag, progress, checksum, favoredNodes);
 
@@ -1942,13 +1995,13 @@ public class DFSOutputStream extends FSOutputSummer
     // ChecksumSize 是4个字节
     final int chunkSize = csize + getChecksumSize();
 
-    // 一个packet里面可以有几个chunk
+    // 一个packet里面可以有几个chunk ： （一个packet的大小 / 一个chunk的大小）
     // chunkSize = 516 字节
     // psize  = 65536字节 = 64kb
     chunksPerPacket = Math.max(psize/chunkSize, 1);
 
     // 64kb
-    packetSize = chunkSize*chunksPerPacket;
+    packetSize = chunkSize * chunksPerPacket;
 
     if (DFSClient.LOG.isDebugEnabled()) {
       DFSClient.LOG.debug("computePacketChunkSize: src=" + src +

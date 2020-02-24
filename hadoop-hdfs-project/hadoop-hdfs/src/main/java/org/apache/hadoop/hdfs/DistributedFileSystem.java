@@ -389,33 +389,58 @@ public class DistributedFileSystem extends FileSystem {
       }
     }.resolve(this, absF);
   }
-  
+
+
+  /**
+   *  FileSystemLinkResolver的doCall拿到输出流  FSDataOutputStream（实际是 HdfsDataOutputStream 进行包裹的）
+   *
+   *  然后调用 write方法 写数据就可以了
+   *
+   *  FSDataOutputStream （HdfsDataOutputStream）
+   *
+   *  ==》 最终的输出都落到  DFSOutputStream 中完成
+   *
+   *
+   */
   @Override
   public FSDataOutputStream create(final Path f, final FsPermission permission,
     final EnumSet<CreateFlag> cflags, final int bufferSize,
     final short replication, final long blockSize, final Progressable progress,
     final ChecksumOpt checksumOpt) throws IOException {
     statistics.incrementWriteOps(1);
-    Path absF = fixRelativePart(f);
+    Path absF = fixRelativePart(f);// 绝对路径
 
     return new FileSystemLinkResolver<FSDataOutputStream>() {
+
+
+      /**
+       *  通过doCall 方法拿到输出流
+       */
       @Override
       public FSDataOutputStream doCall(final Path p)
           throws IOException, UnresolvedLinkException {
+
         // 这个东西底层，主要还是在调用 DFSClient 的create() 方法，来创建一个针对HDFS的输出流
         final DFSOutputStream dfsos = dfs.create(getPathName(p), permission,
                 cflags, replication, blockSize, progress, bufferSize,
                 checksumOpt);
-        //再把创建的输出流（HdfsDataOutputStream）包裹一下
+
+        // 再把创建的输出流（HdfsDataOutputStream）包裹一下
         return dfs.createWrappedOutputStream(dfsos, statistics);
       }
+
+
       @Override
       public FSDataOutputStream next(final FileSystem fs, final Path p)
           throws IOException {
         return fs.create(p, permission, cflags, bufferSize,
             replication, blockSize, progress, checksumOpt);
       }
+
+
     }
+    // resolve 方法的逻辑就是, 先调用子类的doCall方法，出现异常才会调用next方法
+    // 也就是只要看 doCall方法 就行了
     .resolve(this, absF);
 
   }

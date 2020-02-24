@@ -78,6 +78,7 @@ public abstract class FileSystemLinkResolver<T> {
     FileSystem fs = filesys;
     for (boolean isLink = true; isLink;) {
       try {
+        // 就是调用 doCall 方法
         in = doCall(p);
         isLink = false;
       } catch (UnresolvedLinkException e) {
@@ -101,6 +102,7 @@ public abstract class FileSystemLinkResolver<T> {
         fs = FileSystem.getFSofPath(p, filesys.getConf());
         // Have to call next if it's a new FS
         if (!fs.equals(filesys)) {
+          // 如果出现UnresolvedLinkException异常，才会调用  next() 方法
           return next(fs, p);
         }
         // Else, we keep resolving with this filesystem

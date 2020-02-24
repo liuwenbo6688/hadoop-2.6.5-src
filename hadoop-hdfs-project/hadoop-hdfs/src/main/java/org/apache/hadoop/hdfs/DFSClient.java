@@ -258,6 +258,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   private Text dtService;
 
   final UserGroupInformation ugi;
+  // volatile, 可见性，非常清楚了
   volatile boolean clientRunning = true;
   volatile long lastLeaseRenewal;
   private volatile FsServerDefaults serverDefaults;
@@ -820,6 +821,9 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   /** Get a lease and start automatic renewal */
   private void beginFileLease(final long inodeId, final DFSOutputStream out)
       throws IOException {
+    /**
+     * 去开启这个file的续约线程
+     */
     getLeaseRenewer().put(inodeId, out, this);
   }
 
@@ -1589,7 +1593,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
                              ChecksumOpt checksumOpt)
       throws IOException {
     /**
-     *
+     * 创建 DFSOutputStream 输出流，跟进去
      */
     return create(src, permission, flag, true,
         replication, blockSize, progress, buffersize, checksumOpt, null);
@@ -1651,6 +1655,8 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
                              InetSocketAddress[] favoredNodes) throws IOException {
     checkOpen();// 检查当前dfs client是否在运行
 
+
+    // 这一堆都是琐碎代码，没必要看，什么权限和favoredNodes
     if (permission == null) {
       permission = FsPermission.getFileDefault();
     }
@@ -1668,7 +1674,9 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
       }
     }
 
+
     /**
+     * 需要关注的在这里，如何创建 DFSOutputStream才是重中之重
      * 比较核心的方法在这
      * 这里面的逻辑非常复杂了
      */
@@ -1689,7 +1697,8 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
      *
      * 开启文件的续约，启动一个线程，不断的去namenode进行契约的续约
      */
-    beginFileLease(result.getFileId(), result);
+    beginFileLease(result.getFileId(),  // 之前创建的file的id，就是 inodeId
+            result);
 
     return result;
   }

@@ -328,8 +328,12 @@ public class FSDirectory implements Closeable {
         storagePolicyId);
   }
 
+
+
   /**
    * Add the given filename to the fs.
+   * 添加一个文件到 FSNamesystem 中
+   * 返回创建的 INodeFile
    * @throws FileAlreadyExistsException
    * @throws QuotaExceededException
    * @throws UnresolvedLinkException
@@ -371,6 +375,8 @@ public class FSDirectory implements Closeable {
     }
     return newNode;
   }
+
+
 
   INodeFile unprotectedAddFile( long id,
                             String path, 
@@ -3365,7 +3371,20 @@ public class FSDirectory implements Closeable {
    */
   INodesInPath getINodesInPath4Write(String src, boolean resolveLink)
           throws UnresolvedLinkException, SnapshotAccessControlException {
+    /**
+     *
+     * /user/hive/warehouse/data/info.txt
+     * 把路径中每一层都解析为字节数组
+     * user         ==>  byte[]
+     * hive         ==> byte[]
+     * warehouse    ==> byte[]
+     * data         ==> byte[]
+     * info.txt     ==> byte[]
+     *
+     */
     final byte[][] components = INode.getPathComponents(src);
+
+
     INodesInPath inodesInPath = INodesInPath.resolve(rootDir, components,
             components.length, resolveLink);
     if (inodesInPath.isSnapshot()) {

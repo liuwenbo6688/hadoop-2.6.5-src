@@ -44,7 +44,7 @@ public class HdfsFileStatus {
   private final FsPermission permission;
   private final String owner;
   private final String group;
-  private final long fileId;
+  private final long fileId; // 通过 fileId 关联
 
   private final FileEncryptionInfo feInfo;
   
