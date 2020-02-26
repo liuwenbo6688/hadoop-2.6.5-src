@@ -36,10 +36,16 @@ abstract public class FSOutputSummer extends OutputStream {
   // data checksum
   private final DataChecksum sum;
   // internal buffer for storing data before it is checksumed
+
   // 缓冲
+  // buf缓冲的大小 =  一个chunk512字节 * 9
+  // 也就是这个buf可以写9个chunk
   private byte buf[];
+
   // internal buffer for storing checksum
   private byte checksum[];
+
+  // 记录 buf数组 实际存储的有效字节数
   // The number of valid bytes in the buffer.
   private int count;
   
@@ -53,6 +59,7 @@ abstract public class FSOutputSummer extends OutputStream {
     this.sum = sum;
     // buf缓冲的大小 =  一个chunk512字节 * 9
     this.buf = new byte[sum.getBytesPerChecksum() * BUFFER_NUM_CHUNKS];
+    // 检验和的数组，也是能放9个校验和
     this.checksum = new byte[getChecksumSize() * BUFFER_NUM_CHUNKS];
     this.count = 0;
   }
@@ -114,6 +121,8 @@ abstract public class FSOutputSummer extends OutputStream {
 
     /**
      *  调用write1()方法
+     *
+     *  循环的调用write1() ，直到数据写完
      */
     for (int n = 0; n < len; n += write1(b, off + n, len - n)) {
     }
@@ -138,20 +147,26 @@ abstract public class FSOutputSummer extends OutputStream {
     }
 
     // copy user data to local buffer
-    // 当前这个字节数组的数据还没达到一个chunk的大小
-    // 此时可以将这个字节数组的数据写入 buf 缓冲中
-    // buf就是缓冲
-    int bytesToCopy = buf.length - count;
+    /**
+     *  当前这个字节数组的数据还没达到一个chunk的大小
+     *  此时可以将这个字节数组的数据写入 buf 缓冲中
+     */
 
+    // buf就是缓冲
+    // bytesToCopy这次可以写的数据上限
+    int bytesToCopy = buf.length - count;
     bytesToCopy = (len < bytesToCopy) ? len : bytesToCopy;
+
+    // 把要写入的数据拷贝到缓冲buf中
     System.arraycopy(b, off, buf, count, bytesToCopy);
-    count += bytesToCopy;
+    count += bytesToCopy; // 总数累加
 
     if (count == buf.length) {
       // local buffer is full
       // buf写满的时候，进行buf的刷新，最终也要调用 writeChecksumChunks()
       flushBuffer();
     }
+
     return bytesToCopy;
   }
 
@@ -159,6 +174,7 @@ abstract public class FSOutputSummer extends OutputStream {
    * the underlying output stream. 
    */
   protected synchronized void flushBuffer() throws IOException {
+    // 刷新 buffer
     flushBuffer(false, true);
   }
 
@@ -178,12 +194,17 @@ abstract public class FSOutputSummer extends OutputStream {
     int partialLen = bufLen % sum.getBytesPerChecksum();
     int lenToFlush = flushPartial ? bufLen : bufLen - partialLen;
     if (lenToFlush != 0) {
+
+      /**
+       * 切分成 一个一个的 chunk
+       */
       writeChecksumChunks(buf, 0, lenToFlush);
+
       if (!flushPartial || keep) {
         count = partialLen;
         System.arraycopy(buf, bufLen - count, buf, 0, count);
       } else {
-      count = 0;
+        count = 0;
       }
     }
 
@@ -218,6 +239,10 @@ abstract public class FSOutputSummer extends OutputStream {
   private void writeChecksumChunks(byte b[], int off, int len)
   throws IOException {
 
+
+    /**
+     * 在这里计算校验和，应该就是填充 checksum变量的地方
+     */
     sum.calculateChunkedSums(b, off, len, checksum, 0);
 
 
@@ -227,7 +252,16 @@ abstract public class FSOutputSummer extends OutputStream {
 
       int ckOffset = i / sum.getBytesPerChecksum() * getChecksumSize();
 
-      writeChunk(b, off + i, chunkLen, checksum, ckOffset, getChecksumSize());
+      /**
+       * 一个 Chunk 一个 Chunk的写入
+       */
+      writeChunk(b,  // 其实就是内存缓冲buf
+              off + i,  // 内存缓冲buf的起始偏移量
+              chunkLen, // 写入的大小：一般就是一个chunk的大小，如果是最后一个，可能不到一个chunk的大小
+              checksum, // 校验和
+              ckOffset, // 校验和写入起始偏移量
+              getChecksumSize() //校验和写入的长度
+      );
     }
   }
 

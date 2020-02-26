@@ -32,7 +32,12 @@ import org.apache.hadoop.classification.InterfaceStability;
 @InterfaceStability.Stable
 public class FSDataOutputStream extends DataOutputStream
     implements Syncable, CanSetDropBehind {
+
+  /**
+   * 实际是 DFSOutputStream
+   */
   private final OutputStream wrappedStream;
+
 
   private static class PositionCache extends FilterOutputStream {
     private FileSystem.Statistics statistics;
@@ -41,12 +46,14 @@ public class FSDataOutputStream extends DataOutputStream
     public PositionCache(OutputStream out, 
                          FileSystem.Statistics stats,
                          long pos) throws IOException {
-      super(out);
+
+      super(out); // out 也是 DFSOutputStream
       statistics = stats;
       position = pos;
     }
 
     public void write(int b) throws IOException {
+      // DFSOutputStream
       out.write(b);
       position++;
       if (statistics != null) {
@@ -74,6 +81,8 @@ public class FSDataOutputStream extends DataOutputStream
     }
   }
 
+
+
   @Deprecated
   public FSDataOutputStream(OutputStream out) throws IOException {
     this(out, null);
@@ -86,6 +95,7 @@ public class FSDataOutputStream extends DataOutputStream
 
   public FSDataOutputStream(OutputStream out, FileSystem.Statistics stats,
                             long startPosition) throws IOException {
+    //他的out就是 PositionCache
     super(new PositionCache(out, stats, startPosition));
     wrappedStream = out;
   }
