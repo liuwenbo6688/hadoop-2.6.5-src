@@ -2524,7 +2524,7 @@ public class FSDirectory implements Closeable {
         node.getGroupName(snapshot),
         node.isSymlink() ? node.asSymlink().getSymlink() : null,
         path,
-        node.getId(),
+        node.getId(), // fileId就是nodeId
         childrenNum,
         feInfo,
         storagePolicy);

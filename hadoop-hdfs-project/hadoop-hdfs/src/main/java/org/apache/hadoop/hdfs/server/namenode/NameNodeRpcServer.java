@@ -608,10 +608,16 @@ class NameNodeRpcServer implements NamenodeProtocols {
        * 应该是在这个方法里完成文件目录树中新增一个文件的操作
        * 包括去写edits log
        */
-    HdfsFileStatus fileStatus = namesystem.startFile(src, new PermissionStatus(
-        getRemoteUser().getShortUserName(), null, masked),
-        clientName, clientMachine, flag.get(), createParent, replication,
-        blockSize, supportedVersions);
+    HdfsFileStatus fileStatus = namesystem.startFile(
+            src,
+            new PermissionStatus(getRemoteUser().getShortUserName(), null, masked),
+            clientName, // 客户端名称
+            clientMachine, // 客户端机器
+            flag.get(),
+            createParent,
+            replication,
+            blockSize,
+            supportedVersions);
 
     metrics.incrFilesCreated();
     metrics.incrCreateFileOps();

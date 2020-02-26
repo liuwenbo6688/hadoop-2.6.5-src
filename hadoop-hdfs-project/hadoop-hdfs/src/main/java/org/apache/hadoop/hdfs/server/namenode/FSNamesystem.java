@@ -2894,8 +2894,10 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       /**
        *  添加契约（客户端对文件持有的契约）
        */
-      leaseManager.addLease(newNode.getFileUnderConstructionFeature()
-          .getClientName(), src);
+      leaseManager.addLease(
+              newNode.getFileUnderConstructionFeature().getClientName(), // 客户端
+              src  // 文件路径
+      );
 
       // Set encryption attributes if necessary
       if (feInfo != null) {

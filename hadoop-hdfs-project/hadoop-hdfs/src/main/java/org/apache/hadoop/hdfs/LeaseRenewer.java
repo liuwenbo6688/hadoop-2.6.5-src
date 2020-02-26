@@ -295,6 +295,9 @@ class LeaseRenewer {
       if (!isRunning() || isRenewerExpired()) {
         //start a new deamon with a new id.
         final int id = ++currentId;
+
+
+        // 初始化一个后台线程，并且启动线程
         daemon = new Daemon(new Runnable() {
           @Override
           public void run() {
@@ -329,6 +332,9 @@ class LeaseRenewer {
           }
         });
         daemon.start();
+
+
+
       }
       dfsc.putFileBeingWritten(inodeId, out);
       emptyTime = Long.MAX_VALUE;
@@ -425,6 +431,13 @@ class LeaseRenewer {
       final DFSClient c = copies.get(i);
       //skip if current client name is the same as the previous name.
       if (!c.getClientName().equals(previousName)) {
+
+        /**
+         * 这种写代码的方式太恶心，
+         * 核心的方法，怎么能写在if里面呢，找都找不到
+         *
+         * 对一个DFSClient
+         */
         if (!c.renewLease()) {
           if (LOG.isDebugEnabled()) {
             LOG.debug("Did not renew lease for client " +
@@ -432,6 +445,8 @@ class LeaseRenewer {
           }
           continue;
         }
+
+
         previousName = c.getClientName();
         if (LOG.isDebugEnabled()) {
           LOG.debug("Lease renewed for client " + previousName);
@@ -446,10 +461,16 @@ class LeaseRenewer {
    */
   private void run(final int id) throws InterruptedException {
 
-    for(long lastRenewed = Time.now(); !Thread.interrupted(); Thread.sleep(getSleepPeriod())) {
+    for(long lastRenewed = Time.now();
+        !Thread.interrupted();
+        Thread.sleep(getSleepPeriod()) /*睡眠一段时间*/  ) {
+
       final long elapsed = Time.now() - lastRenewed;
       if (elapsed >= getRenewalTime()) {
         try {
+          /**
+           * 客户端续约核心方法
+           */
           renew();
           if (LOG.isDebugEnabled()) {
             LOG.debug("Lease renewer daemon for " + clientsString()

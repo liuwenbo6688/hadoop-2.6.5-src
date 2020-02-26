@@ -263,7 +263,12 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   volatile long lastLeaseRenewal;
   private volatile FsServerDefaults serverDefaults;
   private volatile long serverDefaultsLastUpdate;
+
+  /**
+   *  客户端名称？？
+   */
   final String clientName;
+
   final SocketFactory socketFactory;
   final ReplaceDatanodeOnFailure dtpReplaceDatanodeOnFailure;
   final FileSystem.Statistics stats;
@@ -892,6 +897,10 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   boolean renewLease() throws IOException {
     if (clientRunning && !isFilesBeingWrittenEmpty()) {
       try {
+
+        /**
+         * 调用 namenode 的接口
+         */
         namenode.renewLease(clientName);
         updateLastLeaseRenewal();
         return true;

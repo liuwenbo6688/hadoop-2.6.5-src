@@ -249,6 +249,7 @@ public class LeaseManager {
   synchronized void renewLease(Lease lease) {
     if (lease != null) {
       sortedLeases.remove(lease);
+      // 核心就是更新一个时间戳
       lease.renew();
       sortedLeases.add(lease);
     }

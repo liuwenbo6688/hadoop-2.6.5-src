@@ -425,6 +425,11 @@ public class DFSOutputStream extends FSOutputSummer
   // if them are received, the DataStreamer closes the current block.
   //
 
+
+
+
+  // ====================================DataStreamer start ===============================================================================================
+
   /**
    * DataStreamer 是一个核心线程，专门负责将数据上传到datanode的核心线程
    * 他是负责一个数据管道（pipeline），将数据（packet）发送给 datanodes
@@ -1732,6 +1737,10 @@ public class DFSOutputStream extends FSOutputSummer
       lastException.compareAndSet(null, e);
     }
   }
+
+  // ====================================DataStreamer end ===============================================================================================
+
+
 
   /**
    * Create a socket for a write pipeline
