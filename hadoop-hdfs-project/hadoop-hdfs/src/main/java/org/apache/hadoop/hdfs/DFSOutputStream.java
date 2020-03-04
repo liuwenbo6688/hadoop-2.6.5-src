@@ -202,6 +202,7 @@ public class DFSOutputStream extends FSOutputSummer
   private long currentSeqno = 0;
   private long lastQueuedSeqno = -1;
   private long lastAckedSeqno = -1;
+  // 当前block写入的字节数
   private long bytesCurBlock = 0; // bytes written in current block
 
   /**
@@ -271,6 +272,7 @@ public class DFSOutputStream extends FSOutputSummer
     long seqno; // sequencenumber of buffer in block
     final long offsetInBlock; // offset in block
     boolean syncBlock; // this packet forces the current block to disk
+    // 当前packet写入的chunk数量
     int numChunks; // number of chunks currently in packet
     final int maxChunks; // max chunks in packet
 
@@ -2023,12 +2025,15 @@ public class DFSOutputStream extends FSOutputSummer
   private void queueCurrentPacket() {
     synchronized (dataQueue) {
       if (currentPacket == null) return;
+      /**
+       * 把写完packet放入待发送队列尾部
+       */
       dataQueue.addLast(currentPacket);
       lastQueuedSeqno = currentPacket.seqno;
       if (DFSClient.LOG.isDebugEnabled()) {
         DFSClient.LOG.debug("Queued packet " + currentPacket.seqno);
       }
-      //这样就相当于重新开启一个packet了
+      // 这样就相当于重新开启一个packet了
       currentPacket = null;
       dataQueue.notifyAll();
     }
@@ -2101,13 +2106,13 @@ public class DFSOutputStream extends FSOutputSummer
       }
     }
 
-    // 写入Checksum
+    // 写入Checksum，写到packet里面的buf中
     currentPacket.writeChecksum(checksum, ckoff, cklen);
-    // 写入数据
+    // 写入数据，写到packet里面的buf中
     currentPacket.writeData(b, offset, len);
     // 更新你已经往这个packet里写了几个chunk了
     currentPacket.numChunks++;
-    // 当前block写入的大小
+    // 当前block写入的字节大小
     bytesCurBlock += len;
 
     // If packet is full, enqueue it for transmission
@@ -2127,7 +2132,7 @@ public class DFSOutputStream extends FSOutputSummer
             ", appendChunk=" + appendChunk);
       }
 
-      //在这里，这个方法就会将 当前这个packet放到 dataQueue 中去
+      //*** 在这里，这个方法就会将当前这个写满的packet放到 dataQueue 中去
       waitAndQueueCurrentPacket();
 
       // If the reopened file did not end at chunk boundary and the above

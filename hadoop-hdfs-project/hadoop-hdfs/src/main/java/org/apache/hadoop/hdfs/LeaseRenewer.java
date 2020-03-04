@@ -427,6 +427,7 @@ class LeaseRenewer {
       }
     });
     String previousName = "";
+    // 遍历所有的dfsclient，进行续约
     for(int i = 0; i < copies.size(); i++) {
       final DFSClient c = copies.get(i);
       //skip if current client name is the same as the previous name.
