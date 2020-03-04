@@ -440,7 +440,7 @@ public class DFSOutputStream extends FSOutputSummer
    */
   class DataStreamer extends Daemon {
 
-    private volatile boolean streamerClosed = false;
+    private volatile boolean streamerClosed = false; // 标准的 volatile使用方式
     private volatile ExtendedBlock block; // its length is number of bytes acked
     private Token<BlockTokenIdentifier> accessToken;
     private DataOutputStream blockStream;
@@ -450,9 +450,17 @@ public class DFSOutputStream extends FSOutputSummer
     private DataInputStream blockReplyStream;
 
     private ResponseProcessor response = null;
+
+    /**
+     * nodes\storageTypes\storageIDs 对应了管道流的信息
+     *
+     * 从 node1 -》 node2 =》 node3
+     */
     private volatile DatanodeInfo[] nodes = null; // list of targets for current block
     private volatile StorageType[] storageTypes = null;
     private volatile String[] storageIDs = null;
+
+
     private final LoadingCache<DatanodeInfo, DatanodeInfo> excludedNodes =
         CacheBuilder.newBuilder()
         .expireAfterWrite(
@@ -478,7 +486,12 @@ public class DFSOutputStream extends FSOutputSummer
     volatile int errorIndex = -1;
     volatile int restartingNodeIndex = -1; // Restarting node index
     private long restartDeadline = 0; // Deadline of DN restart
+
+    /**
+     * block构建过程中，状态转换的一个枚举变量
+     */
     private BlockConstructionStage stage;  // block construction stage
+
     private long bytesSent = 0; // number of bytes that've been sent
     private final boolean isLazyPersistFile;
 
@@ -562,6 +575,7 @@ public class DFSOutputStream extends FSOutputSummer
       }
     }
 
+    // 设置管道流信息
     private void setPipeline(LocatedBlock lb) {
       setPipeline(lb.getLocations(), lb.getStorageTypes(), lb.getStorageIDs());
     }
@@ -626,7 +640,7 @@ public class DFSOutputStream extends FSOutputSummer
           }
         }
 
-        Packet one;
+        Packet one; // 声明一个packet
         try {
           // process datanode IO errors if any
           boolean doSleep = false;
@@ -634,6 +648,10 @@ public class DFSOutputStream extends FSOutputSummer
             doSleep = processDatanodeError();
           }
 
+
+          /**
+           *
+           */
           synchronized (dataQueue) {
             // wait for a packet to be sent.
             long now = Time.now();
@@ -645,10 +663,12 @@ public class DFSOutputStream extends FSOutputSummer
                 (stage != BlockConstructionStage.DATA_STREAMING || 
                  stage == BlockConstructionStage.DATA_STREAMING && 
                  now - lastPacket < dfsClient.getConf().socketTimeout/2)) || doSleep ) {
+
+              // 反正就是计算一个睡眠时间
               long timeout = dfsClient.getConf().socketTimeout/2 - (now-lastPacket);
               timeout = timeout <= 0 ? 1000 : timeout;
-              timeout = (stage == BlockConstructionStage.DATA_STREAMING)?
-                 timeout : 1000;
+              timeout = (stage == BlockConstructionStage.DATA_STREAMING)? timeout : 1000;
+
               try {
                 // 等待 dataQueue 不是空
                 dataQueue.wait(timeout);
@@ -659,12 +679,12 @@ public class DFSOutputStream extends FSOutputSummer
               now = Time.now();
             }
 
-
             if (streamerClosed || hasError || !dfsClient.clientRunning) {
               continue;
             }
             // get packet to be sent.
             if (dataQueue.isEmpty()) {
+              // 就算还是空， 也要创建一个心跳的packet过去
               one = createHeartbeatPacket();
             } else {
               // 先进先出
@@ -672,19 +692,30 @@ public class DFSOutputStream extends FSOutputSummer
             }
           }
 
+
+
+
           // 这里已经拿到了一个 packet 了
           assert one != null;
 
           // get new block from namenode.
           if (stage == BlockConstructionStage.PIPELINE_SETUP_CREATE) {
+            /**
+             * 1、一开始状态是 PIPELINE_SETUP_CREATE
+             * 此时需要向NameNode申请数据块及所在数据节点
+             */
             if(DFSClient.LOG.isDebugEnabled()) {
               DFSClient.LOG.debug("Allocating new block");
             }
 
-            // nextBlockOutputStream() 方法其实就是负责跟namenode去申请一个新的block、建立好数据流的管道
+
+            /**
+             *  nextBlockOutputStream() 方法其实就是负责跟namenode去申请一个新的block、建立好数据流的管道
+             *
+             */
             setPipeline( nextBlockOutputStream() );
 
-            //
+            // 把状态设置为 DATA_STREAMING，正在流式写入数据的阶段
             initDataStreaming();
 
           } else if (stage == BlockConstructionStage.PIPELINE_SETUP_APPEND) {
@@ -706,8 +737,12 @@ public class DFSOutputStream extends FSOutputSummer
 
 
           if (one.lastPacketInBlock) {
-            //如果是当前block发送的最后一个packet的话，那么就会在这里陷入一个无限的循环和等待，等待之前发送的block
-            //里面的packet全部被处理掉，都上传好
+            /**
+             *  如果这个packet是当前block的最后一个packet，
+             *  那么就会在这里陷入一个无限的循环和等待，等待之前发送的block
+             *  里面的packet全部被处理掉，都上传好
+             */
+
             // wait for all data packets have been successfully acked
             synchronized (dataQueue) {
               while (!streamerClosed
@@ -717,6 +752,7 @@ public class DFSOutputStream extends FSOutputSummer
                       && dfsClient.clientRunning) {
                 try {
                   // wait for acks to arrive from datanodes
+                  // 等待1秒，也就是等待dn的ack确认
                   dataQueue.wait(1000);
                 } catch (InterruptedException  e) {
                   DFSClient.LOG.warn("Caught exception ", e);
@@ -726,20 +762,27 @@ public class DFSOutputStream extends FSOutputSummer
             if (streamerClosed || hasError || !dfsClient.clientRunning) {
               continue;
             }
+            // 状态设置为 关闭
             stage = BlockConstructionStage.PIPELINE_CLOSE;
           }
-          
+
+
+          /**
+           * 把packet从队列 dataQueue 转移到队列 ackQueue 中
+           */
           // send the packet
           synchronized (dataQueue) {
             // move packet from dataQueue to ackQueue
             if (!one.isHeartbeatPacket()) {
-              //锁住dataQueue，然后从dataQueue队列中移除第一个，并加入到 ackQueue 中
+              // 锁住dataQueue，然后从dataQueue队列中移除第一个，并加入到 ackQueue 中
               dataQueue.removeFirst();
               ackQueue.addLast(one);
               dataQueue.notifyAll();
             }
           }
 
+
+          // debug日志
           if (DFSClient.LOG.isDebugEnabled()) {
             DFSClient.LOG.debug("DataStreamer block " + block +
                 " sending packet " + one);
@@ -775,6 +818,8 @@ public class DFSOutputStream extends FSOutputSummer
             continue;
           }
 
+
+          // 结束 block
           // Is this block full?
           if (one.lastPacketInBlock) {
             // wait for the close packet has been acked
@@ -789,8 +834,12 @@ public class DFSOutputStream extends FSOutputSummer
             }
 
             // 结束这个block，包括关闭各种流 + 设置 stage 变量
+            // 状态重新置为  PIPELINE_SETUP_CREATE
             endBlock();
           }
+
+
+
           if (progress != null) { progress.progress(); }
 
           // This is used by unit test to trigger race conditions.
@@ -1450,7 +1499,10 @@ public class DFSOutputStream extends FSOutputSummer
       LocatedBlock lb = null;
       DatanodeInfo[] nodes = null;
       StorageType[] storageTypes = null;
+
+      //dfs.client.block.write.retries 默认3次
       int count = dfsClient.getConf().nBlockWriteRetry;
+
       boolean success = false;
       ExtendedBlock oldBlock = block;
       do {
@@ -2069,6 +2121,10 @@ public class DFSOutputStream extends FSOutputSummer
   @Override
   protected synchronized void writeChunk(byte[] b, int offset, int len,
       byte[] checksum, int ckoff, int cklen) throws IOException {
+
+    /**
+     * 客户端状态检查
+     */
     dfsClient.checkOpen();
     checkClosed();
 
