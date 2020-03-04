@@ -3393,7 +3393,10 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
 
     // choose targets for the new block to be allocated.
-    // 为新的block选择一批datanode，遵循机架感知特性
+    //
+    /**
+     * 交给 BlockManager 为新的block选择一批datanode，遵循机架感知特性
+     */
     final DatanodeStorageInfo targets[] = getBlockManager().chooseTarget4NewBlock( 
         src, replication, clientNode, excludedNodes, blockSize, favoredNodes,
         storagePolicyID);
@@ -3444,6 +3447,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
       // 将这个block放到 文件目录树的叶子节点里面去，挂到内存元数据里面
       INodesInPath inodesInPath = INodesInPath.fromINode(pendingFile);
+      // 把创建的block挂到内存文件下面
       saveAllocatedBlock(src, inodesInPath, newBlock, targets);
 
       persistNewBlock(src, pendingFile);
