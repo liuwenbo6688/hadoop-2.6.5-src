@@ -126,8 +126,13 @@ class DataXceiver extends Receiver implements Runnable {
 
     this.peer = peer;
     this.dnConf = datanode.getDnConf();
+    /**
+     * 输入流和输出流
+     */
     this.socketIn = peer.getInputStream();
     this.socketOut = peer.getOutputStream();
+
+
     this.datanode = datanode;
     this.dataXceiverServer = dataXceiverServer;
     this.connectToDnViaHostname = datanode.getDnConf().connectToDnViaHostname;
@@ -187,12 +192,17 @@ class DataXceiver extends Receiver implements Runnable {
       //下面这段就是拿到输入和输出流
       InputStream input = socketIn;
       try {
+
+        // 这边也是没做什么，没有安全相关的配置，就是直接封装的一个IOStreamPair
         IOStreamPair saslStreams = datanode.saslServer.receive(peer, socketOut,
           socketIn, datanode.getXferAddress().getPort(),
           datanode.getDatanodeId());
-        input = new BufferedInputStream(saslStreams.in,
-          HdfsConstants.SMALL_BUFFER_SIZE);
+
+        // 输入流
+        input = new BufferedInputStream(saslStreams.in, HdfsConstants.SMALL_BUFFER_SIZE);
+        // 输出流
         socketOut = saslStreams.out;
+
       } catch (InvalidMagicNumberException imne) {
         LOG.info("Failed to read expected encryption handshake from client " +
             "at " + peer.getRemoteAddressString() + ". Perhaps the client " +
@@ -216,7 +226,12 @@ class DataXceiver extends Receiver implements Runnable {
           } else {
             peer.setReadTimeout(dnConf.socketTimeout);
           }
-          // 在这里读到的就是客户端发送的 WRITE_BLOCK 这么一个操作，写block的操作
+
+
+          /**
+           * 在这里读到的就是客户端发送的 WRITE_BLOCK 这么一个操作，写block的操作
+           * 就读一个字节的操作类型： WRITE_BLOCK
+           */
           op = readOp();
         } catch (InterruptedIOException ignored) {
           // Time out while we wait for client rpc
@@ -240,8 +255,10 @@ class DataXceiver extends Receiver implements Runnable {
         }
 
         opStartTime = now();
+
         /**
-         * 处理这个 WRITE_BLOCK 的操作
+         *  这里才是真正的读取客户端或者上游datanode数据的方法
+         *  处理这个 WRITE_BLOCK 的操作，后面交给 blockReceiver 处理
          */
         processOp(op);
 
@@ -672,12 +689,14 @@ class DataXceiver extends Receiver implements Runnable {
         // open a block receiver
         // blockReceiver 组件负责接收上游发送的packet数据包，将packet数据包存储在本地的磁盘文件里
         // 同时还会将数据包发送到下游的datanode中
-        blockReceiver = new BlockReceiver(block, storageType, in,
-            peer.getRemoteAddressString(),
-            peer.getLocalAddressString(),
-            stage, latestGenerationStamp, minBytesRcvd, maxBytesRcvd,
-            clientname, srcDataNode, datanode, requestedChecksum,
-            cachingStrategy, allowLazyPersist);
+        blockReceiver = new BlockReceiver(block,
+                storageType,
+                in,
+                peer.getRemoteAddressString(),
+                peer.getLocalAddressString(),
+                stage, latestGenerationStamp, minBytesRcvd, maxBytesRcvd,
+                clientname, srcDataNode, datanode, requestedChecksum,
+                cachingStrategy, allowLazyPersist);
 
         storageUuid = blockReceiver.getStorageUuid();
       } else {
@@ -716,21 +735,34 @@ class DataXceiver extends Receiver implements Runnable {
           InputStream unbufMirrorIn = NetUtils.getInputStream(mirrorSock);
           DataEncryptionKeyFactory keyFactory =
             datanode.getDataEncryptionKeyFactoryForBlock(block);
+
           IOStreamPair saslStreams = datanode.saslClient.socketSend(mirrorSock,
             unbufMirrorOut, unbufMirrorIn, keyFactory, blockToken, targets[0]);
           unbufMirrorOut = saslStreams.out;
           unbufMirrorIn = saslStreams.in;
+
+          // 拿到管道流下一个节点的输入流和输出流
           mirrorOut = new DataOutputStream(new BufferedOutputStream(unbufMirrorOut,
               HdfsConstants.SMALL_BUFFER_SIZE));
           mirrorIn = new DataInputStream(unbufMirrorIn);
 
-          // 向下一个datanode写一个空块
-          // 下游节点也会一样，本地创建一个磁盘文件然后再往下游发送空块，这样一直建立好这个管道流 pipeline
+
           // Do not propagate allowLazyPersist to downstream DataNodes.
-          new Sender(mirrorOut).writeBlock(originalBlock, targetStorageTypes[0],
-              blockToken, clientname, targets, targetStorageTypes, srcDataNode,
-              stage, pipelineSize, minBytesRcvd, maxBytesRcvd,
-              latestGenerationStamp, requestedChecksum, cachingStrategy, false);
+          /**
+           *  向下一个datanode写一个空块
+           *  下游节点也会一样，本地创建一个磁盘文件然后再往下游发送空块，这样一直建立好这个管道流 pipeline
+           */
+          new Sender(mirrorOut).writeBlock(originalBlock,
+                  targetStorageTypes[0],
+                  blockToken,
+                  clientname,
+                  targets,
+                  targetStorageTypes,
+                  srcDataNode,
+                  stage, pipelineSize,
+                  minBytesRcvd, maxBytesRcvd,
+                  latestGenerationStamp, requestedChecksum,
+                  cachingStrategy, false);
 
           mirrorOut.flush();
 
@@ -792,11 +824,14 @@ class DataXceiver extends Receiver implements Runnable {
       }
 
       // receive the block and mirror to the next target
+      /**
+       * 接收上游节点的block，发送到下一个节点
+       */
       if (blockReceiver != null) {
         String mirrorAddr = (mirrorSock == null) ? null : mirrorNode;
 
         /**
-         *  调用  blockReceiver的receiveBlock方法一直卡在这，接收block的数据，直到所有的packet都接收完成
+         *  调用blockReceiver的receiveBlock方法一直卡在这，接收block的数据，直到所有的packet都接收完成
          */
         blockReceiver.receiveBlock(mirrorOut, mirrorIn, replyOut,
             mirrorAddr, null, targets, false);

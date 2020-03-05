@@ -679,7 +679,11 @@ class NameNodeRpcServer implements NamenodeProtocols {
     checkNNStartup();
     namesystem.setOwner(src, username, groupname);
   }
-  
+
+
+    /**
+     * 为文件申请一个block
+     */
   @Override
   public LocatedBlock addBlock(String src, String clientName,
       ExtendedBlock previous, DatanodeInfo[] excludedNodes, long fileId,
@@ -690,6 +694,8 @@ class NameNodeRpcServer implements NamenodeProtocols {
       stateChangeLog.debug("*BLOCK* NameNode.addBlock: file " + src
           + " fileId=" + fileId + " for " + clientName);
     }
+
+    // 处理一下 excludedNodes
     Set<Node> excludedNodesSet = null;
     if (excludedNodes != null) {
       excludedNodesSet = new HashSet<Node>(excludedNodes.length);
@@ -697,17 +703,24 @@ class NameNodeRpcServer implements NamenodeProtocols {
         excludedNodesSet.add(node);
       }
     }
+    // 处理一下 favoredNodes
     List<String> favoredNodesList = (favoredNodes == null) ? null
         : Arrays.asList(favoredNodes);
 
       /**
-       *
+       * 去找 FSNamesystem 申请 block
        */
-    LocatedBlock locatedBlock = namesystem.getAdditionalBlock(src, fileId,
-        clientName, previous, excludedNodesSet, favoredNodesList);
+    LocatedBlock locatedBlock = namesystem.getAdditionalBlock(src,
+            fileId,
+            clientName,
+            previous,
+            excludedNodesSet,
+            favoredNodesList);
 
+    // 做一下统计信息
     if (locatedBlock != null)
       metrics.incrAddBlockOps();
+
     return locatedBlock;
   }
 

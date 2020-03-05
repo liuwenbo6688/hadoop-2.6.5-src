@@ -50,8 +50,14 @@ class DataXceiverServer implements Runnable {
   
   private final PeerServer peerServer;
   private final DataNode datanode;
+
+  /**
+   * 保留客户端connection连接对应的处理线程和DataXceiver对象
+   */
   private final HashMap<Peer, Thread> peers = new HashMap<Peer, Thread>();
   private final HashMap<Peer, DataXceiver> peersXceiver = new HashMap<Peer, DataXceiver>();
+
+  // 状态位
   private boolean closed = false;
   
   /**
@@ -141,8 +147,13 @@ class DataXceiverServer implements Runnable {
     // -------------------------while start------------------------------------
     while (datanode.shouldRun && !datanode.shutdownForUpgrade) {
       try {
-        // 线程一旦启动，就在这个while true循环
-        // accept方法等待别人建立连接，接收socket连接，拿到一个peer
+
+
+        /**
+         * TcpPeerServer
+         * 线程一旦启动，就在这个 while true 循环
+         * accept方法等待别人建立连接，接收socket连接，拿到一个peer
+         */
         peer = peerServer.accept();
 
         // Make sure the xceiver count is not exceeded

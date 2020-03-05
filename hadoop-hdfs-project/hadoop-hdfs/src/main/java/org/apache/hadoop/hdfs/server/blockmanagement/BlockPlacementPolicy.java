@@ -93,9 +93,17 @@ public abstract class BlockPlacementPolicy {
     // a block in favored datanodes. The implementations of this class
     // are expected to provide this functionality
 
-    return chooseTarget(src, numOfReplicas, writer, 
-        new ArrayList<DatanodeStorageInfo>(numOfReplicas), false,
-        excludedNodes, blocksize, storagePolicy);
+    /**
+     * BlockPlacementPolicy
+     */
+    return chooseTarget(src,
+            numOfReplicas,
+            writer,
+            new ArrayList<DatanodeStorageInfo>(numOfReplicas),
+            false,
+            excludedNodes,
+            blocksize,
+            storagePolicy);
   }
 
   /**

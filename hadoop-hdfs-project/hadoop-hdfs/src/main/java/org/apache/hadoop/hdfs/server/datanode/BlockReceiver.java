@@ -88,7 +88,7 @@ class BlockReceiver implements Closeable {
    */
   private final boolean needsChecksumTranslation;
 
-  //输出到本地文件的输出流，写本地block文件的
+  //  输出到本地文件的输出流，写本地block文件的
   private OutputStream out = null; // to block file at local disk
 
   private FileDescriptor outFd;
@@ -399,6 +399,7 @@ class BlockReceiver implements Closeable {
 
   /**
    * Flush block data and metadata files to disk.
+   * 这个方法就是 flush 数据block 和 meta文件 到磁盘
    * @throws IOException
    */
   void flushOrSync(boolean isSync) throws IOException {
@@ -579,12 +580,17 @@ class BlockReceiver implements Closeable {
       return 0;
     }
 
+
+
+
     //First write the packet to the mirror:
+    // 这个if里面，就是往下游写数据的逻辑
     if (mirrorOut != null && !mirrorError) {
       try {
         long begin = Time.monotonicNow();
         // For testing. Normally no-op. 这行代码啥玩意都没做
         DataNodeFaultInjector.get().stopSendingPacketDownstream();
+
 
         /**
          *   把packet写到下游的datanode
@@ -592,6 +598,8 @@ class BlockReceiver implements Closeable {
          */
         packetReceiver.mirrorPacketTo(mirrorOut);
         mirrorOut.flush();
+
+
         long now = Time.monotonicNow();
         setLastSentTime(now);
         long duration = now - begin;
@@ -603,7 +611,11 @@ class BlockReceiver implements Closeable {
         handleMirrorOutError(e);
       }
     }
-    
+
+
+
+
+    // 拿到读取过来的数据，就是ByteBuffer，nio那套东西
     ByteBuffer dataBuf = packetReceiver.getDataSlice();
     ByteBuffer checksumBuf = packetReceiver.getChecksumSlice();
     
@@ -612,13 +624,15 @@ class BlockReceiver implements Closeable {
         LOG.debug("Receiving an empty packet or the end of the block " + block);
       }
       // sync block if requested
+      // 当前block读完了，就可以刷磁盘了
       if (syncBlock) {
         flushOrSync(true);
       }
+
     } else {
+
       final int checksumLen = diskChecksum.getChecksumSize(len);
       final int checksumReceivedLen = checksumBuf.capacity();
-
       if (checksumReceivedLen > 0 && checksumReceivedLen != checksumLen) {
         throw new IOException("Invalid checksum length: received length is "
             + checksumReceivedLen + " but expected length is " + checksumLen);
@@ -627,6 +641,8 @@ class BlockReceiver implements Closeable {
       if (checksumReceivedLen > 0 && shouldVerifyChecksum()) {
         /**
          * checksum校验传输正确性
+         *
+         * Crc32
          */
         try {
           verifyChunks(dataBuf, checksumBuf);
@@ -922,10 +938,11 @@ class BlockReceiver implements Closeable {
   }
   
   void receiveBlock(
-      DataOutputStream mirrOut, // output to next datanode
-      DataInputStream mirrIn,   // input from next datanode
-      DataOutputStream replyOut,  // output to previous datanode
-      String mirrAddr, DataTransferThrottler throttlerArg,
+      DataOutputStream mirrOut, // output to next datanode   写入下一个节点的输出流
+      DataInputStream mirrIn,   // input from next datanode  从下一个节点读数据的输入流
+      DataOutputStream replyOut,  // output to previous datanode  对上游节点的输出流
+      String mirrAddr,
+      DataTransferThrottler throttlerArg, // 限流组件
       DatanodeInfo[] downstreams,
       boolean isReplaceBlock) throws IOException {
 
@@ -950,8 +967,15 @@ class BlockReceiver implements Closeable {
       }
 
 
-      // 核心接收packet的逻辑
-      while (receivePacket() >= 0) { /* Receive until the last packet */ }
+      /**
+       * 核心逻辑
+       * 不停的接收packet，直到接收成功
+       */
+      while (receivePacket() >= 0) {
+        /* Receive until the last packet */
+      }
+
+
 
       // wait for all outstanding packet responses. And then
       // indicate responder to gracefully shutdown.

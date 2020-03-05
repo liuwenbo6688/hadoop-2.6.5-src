@@ -658,6 +658,7 @@ public class FSEditLog implements LogsPurgeable {
    * Because this step is unsynchronized, actions that need to avoid
    * concurrency with sync() should be synchronized and also call
    * waitForSyncToFinish() before assuming they are running alone.
+   * 同步 操作日志
    */
   public void logSync() {
     long syncStart = 0;

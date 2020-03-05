@@ -295,9 +295,9 @@ public class DFSOutputStream extends FSOutputSummer
      * preceding the checksum data, so we make sure to keep enough space in
      * front of the checksum data to support the largest conceivable header. 
      */
-    int checksumStart;
+    int checksumStart;  // checksum  的起始偏移
     int checksumPos;
-    final int dataStart;
+    final int dataStart; // 数据的起始偏移地址
     int dataPos;
 
     /**
@@ -348,14 +348,25 @@ public class DFSOutputStream extends FSOutputSummer
      * 把整个packet写到对应的输出流里（包括头信息）
      */
     void writeTo(DataOutputStream stm) throws IOException {
-      final int dataLen = dataPos - dataStart; //数据的长度
-      final int checksumLen = checksumPos - checksumStart;// checksum的长度
+
+      // 数据的长度
+      final int dataLen = dataPos - dataStart;
+      // checksum的长度
+      final int checksumLen = checksumPos - checksumStart;
+      // 这个packet的总长度
       final int pktLen = HdfsConstants.BYTES_IN_INTEGER + dataLen + checksumLen;
 
+      /**
+       *  数据头
+       */
       PacketHeader header = new PacketHeader(
         pktLen, offsetInBlock, seqno, lastPacketInBlock, dataLen, syncBlock);
       
       if (checksumPos != dataStart) {
+        /**
+         * 如果 checksum 和 data 之间还有空隙，一般是出现在最后一个packet中，就是数据不满
+         * 要通过数组的copy，把data数据往前挪，覆盖这个缝隙
+         */
         // Move the checksum to cover the gap. This can happen for the last
         // packet or during an hflush/hsync call.
         System.arraycopy(buf, checksumStart, buf, 
@@ -372,7 +383,7 @@ public class DFSOutputStream extends FSOutputSummer
       
       // Copy the header data into the buffer immediately preceding the checksum
       // data.
-      // 复制 header 到 buf中
+      // 复制 header 到 buf中的开头
       System.arraycopy(header.getBytes(), 0, buf, headerStart,
           header.getSerializedSize());
       
@@ -383,7 +394,9 @@ public class DFSOutputStream extends FSOutputSummer
 
       // Write the now contiguous full packet to the output stream.
       // 这里是写入数据的地方
-      stm.write(buf, headerStart, header.getSerializedSize() + checksumLen + dataLen);
+      stm.write(buf,
+              headerStart, // 写
+              header.getSerializedSize() + checksumLen + dataLen);
 
       // undo corruption.
       if (DFSClientFaultInjector.get().uncorruptPacket()) {
@@ -463,25 +476,34 @@ public class DFSOutputStream extends FSOutputSummer
     private volatile String[] storageIDs = null;
 
 
+    /**
+     *  应该是有故障节点的缓存
+     *  当NameNode分配了节点之后，客户端发现节点不可用，就会放到这个排除节点中，下次告诉NameNode不要在分配这个节点了
+     *
+     *  可以学一下guava的用法
+     */
     private final LoadingCache<DatanodeInfo, DatanodeInfo> excludedNodes =
         CacheBuilder.newBuilder()
-        .expireAfterWrite(
-            dfsClient.getConf().excludedNodesCacheExpiry,
-            TimeUnit.MILLISECONDS)
+         // 缓存项在给定时间内没有被写访问（创建或覆盖），则回收。  默认10 minutes
+        .expireAfterWrite(dfsClient.getConf().excludedNodesCacheExpiry, TimeUnit.MILLISECONDS)
+         // 缓存项被移除时，RemovalListener会获取移除通知
         .removalListener(new RemovalListener<DatanodeInfo, DatanodeInfo>() {
           @Override
           public void onRemoval(
               RemovalNotification<DatanodeInfo, DatanodeInfo> notification) {
-            DFSClient.LOG.info("Removing node " +
-                notification.getKey() + " from the excluded nodes list");
+            DFSClient.LOG.info("Removing node " + notification.getKey() + " from the excluded nodes list");
           }
         })
+
         .build(new CacheLoader<DatanodeInfo, DatanodeInfo>() {
           @Override
           public DatanodeInfo load(DatanodeInfo key) throws Exception {
+            // 加载缓存的逻辑，其实就是把key返回就可以了
             return key;
           }
         });
+
+
 
     private String[] favoredNodes;
     volatile boolean hasError = false;
@@ -790,7 +812,10 @@ public class DFSOutputStream extends FSOutputSummer
                 " sending packet " + one);
           }
 
-          // 向远程的 datanode 写数据
+
+          /**
+           * 向远程的 datanode 写数据
+           */
           // write out data to remote datanode
           try {
             // 直接将packet的数据刷到 datanode 上去
@@ -1524,8 +1549,10 @@ public class DFSOutputStream extends FSOutputSummer
         // 找namenode申请一个新的block就在这里
         // 到这里已经拿到一个block的id 和 datanodes 列表
         // excluded 其实就是有故障的列表，告诉namenode，不要在给我分配这些节点了
-        lb = locateFollowingBlock(startTime,
-            excluded.length > 0 ? excluded : null);
+        lb = locateFollowingBlock(
+                            startTime,
+                            excluded.length > 0 ? excluded : null  // 排除的节点
+        );
 
         block = lb.getBlock();
         block.setNumBytes(0);
@@ -1536,8 +1563,13 @@ public class DFSOutputStream extends FSOutputSummer
 
         //
         // Connect to first DataNode in the list.
-        // 直接对block的datanodes列表中的第一个节点建立连接，创建输出流
+        //
+
+        /**
+         *  直接对block的datanodes列表中的第一个节点建立连接，创建输出流
+         */
         success = createBlockOutputStream(nodes, storageTypes, 0L, false);
+
 
         if (!success) {
           // 如果连接失败的情况下
@@ -1600,15 +1632,33 @@ public class DFSOutputStream extends FSOutputSummer
           s = createSocketForPipeline(nodes[0], nodes.length, dfsClient);
 
           long writeTimeout = dfsClient.getDatanodeWriteTimeout(nodes.length);
-          
+
+          // 通过socket 拿到输出流
           OutputStream unbufOut = NetUtils.getOutputStream(s, writeTimeout);
+
+          // 通过socket 拿到输入流
           InputStream unbufIn = NetUtils.getInputStream(s);
+
+
+          /**
+           * 把输入流和输出流组织成 IOStreamPair
+           */
           IOStreamPair saslStreams = dfsClient.saslClient.socketSend(s,
-            unbufOut, unbufIn, dfsClient, accessToken, nodes[0]);
+                  unbufOut,
+                  unbufIn,
+                  dfsClient,
+                  accessToken,
+                  nodes[0]);
+
           unbufOut = saslStreams.out;
           unbufIn = saslStreams.in;
-          out = new DataOutputStream(new BufferedOutputStream(unbufOut,
-              HdfsConstants.SMALL_BUFFER_SIZE));
+
+          out = new DataOutputStream(new BufferedOutputStream(unbufOut, HdfsConstants.SMALL_BUFFER_SIZE));
+
+
+          /**
+           *  InputStream 输入流
+           */
           // 通过 blockReplyStream 就可以从hdfs客户端直接对接的第一个datanode获取输入流
           // 可以通过整个流读取第一个datanode返回的响应消息
           blockReplyStream = new DataInputStream(unbufIn);
@@ -1626,10 +1676,22 @@ public class DFSOutputStream extends FSOutputSummer
 
           // send the request
           // 此时发送过去的block其实还是空块
-          new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
-              dfsClient.clientName, nodes, nodeStorageTypes, null, bcs, 
-              nodes.length, block.getNumBytes(), bytesSent, newGS,
-              checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile);
+          new Sender(out).writeBlock(
+                  blockCopy, // 一开始block是空的
+                  nodeStorageTypes[0],
+                  accessToken,
+                  dfsClient.clientName,
+                  nodes,
+                  nodeStorageTypes,
+                  null,
+                  bcs,
+                  nodes.length,
+                  block.getNumBytes(),
+                  bytesSent,
+                  newGS,
+                  checksum4WriteBlock,
+                  cachingStrategy.get(),
+                  isLazyPersistFile);
   
           // receive ack for connect
           // 等待获取datanode那边返回建立好连接的ack消息，（其实就是datanode创建本地磁盘文件+管道流）
@@ -1660,7 +1722,12 @@ public class DFSOutputStream extends FSOutputSummer
             }
           }
           assert null == blockStream : "Previous blockStream unclosed";
+
+          /**
+           *  DataOutputStream 输出流
+           */
           blockStream = out;
+
           result =  true; // success
           restartingNodeIndex = -1;
           hasError = false;
@@ -1728,10 +1795,18 @@ public class DFSOutputStream extends FSOutputSummer
         long localstart = Time.now();
         while (true) {
           try {
+
+            /**
+             * 在这里去找 NN 申请新的block
+             */
             // 哪个客户端: clientName
             // 要为哪个文件申请block: src
-            return dfsClient.namenode.addBlock(src, dfsClient.clientName,
-                block, excludedNodes, fileId, favoredNodes);
+            return dfsClient.namenode.addBlock(src, // 为那个文件申请block
+                    dfsClient.clientName, // 客户端的名称
+                    block,   // 申请新的block的时候，把之前的一个block传过去
+                    excludedNodes,  // 排除的节点，就是告诉NameNode，block不要分配在这些节点上
+                    fileId,  // 文件的inodeid
+                    favoredNodes);
 
           } catch (RemoteException e) {
             IOException ue = 
@@ -1743,8 +1818,11 @@ public class DFSOutputStream extends FSOutputSummer
             if (ue != e) { 
               throw ue; // no need to retry these exceptions
             }
-            
-            
+
+
+            /**
+             * 失败重试策略的代码
+             */
             if (NotReplicatedYetException.class.getName().
                 equals(e.getClassName())) {
               if (retries == 0) { 
@@ -1798,6 +1876,7 @@ public class DFSOutputStream extends FSOutputSummer
 
   /**
    * Create a socket for a write pipeline
+   * 创建一个socket
    * @param first the first datanode 
    * @param length the pipeline length
    * @param client client
@@ -1805,17 +1884,30 @@ public class DFSOutputStream extends FSOutputSummer
    */
   static Socket createSocketForPipeline(final DatanodeInfo first,
       final int length, final DFSClient client) throws IOException {
+
+    // 目标datanode地址 ip或者是hostname
     final String dnAddr = first.getXferAddr(
         client.getConf().connectToDnViaHostname);
+
     if (DFSClient.LOG.isDebugEnabled()) {
       DFSClient.LOG.debug("Connecting to datanode " + dnAddr);
     }
+
     final InetSocketAddress isa = NetUtils.createSocketAddr(dnAddr);
+
+    // 创建一个 Socket
     final Socket sock = client.socketFactory.createSocket();
     final int timeout = client.getDatanodeReadTimeout(length);
+
+    /**
+     * 连接目标host
+     */
     NetUtils.connect(sock, isa, client.getRandomLocalInterfaceAddr(), client.getConf().socketTimeout);
+
+    // 设置一下参数
     sock.setSoTimeout(timeout);
     sock.setSendBufferSize(HdfsConstants.DEFAULT_DATA_SOCKET_SIZE);
+
     if(DFSClient.LOG.isDebugEnabled()) {
       DFSClient.LOG.debug("Send buf size " + sock.getSendBufferSize());
     }

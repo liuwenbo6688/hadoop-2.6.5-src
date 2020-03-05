@@ -77,8 +77,13 @@ public class Sender implements DataTransferProtocol {
       LOG.trace("Sending DataTransferOp " + proto.getClass().getSimpleName()
           + ": " + proto);
     }
+
+    // 写操作符
     op(out, opcode);
+
+    // 写数据
     proto.writeDelimitedTo(out);
+
     out.flush();
   }
 
@@ -154,6 +159,9 @@ public class Sender implements DataTransferProtocol {
       proto.setSource(PBHelper.convertDatanodeInfo(source));
     }
 
+    /**
+     *  WRITE_BLOCK
+     */
     send(out, Op.WRITE_BLOCK, proto.build());
   }
 

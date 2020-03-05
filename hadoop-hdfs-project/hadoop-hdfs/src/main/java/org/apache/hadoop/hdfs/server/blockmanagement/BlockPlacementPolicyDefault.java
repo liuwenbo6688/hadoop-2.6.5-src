@@ -106,8 +106,16 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
                                     Set<Node> excludedNodes,
                                     long blocksize,
                                     final BlockStoragePolicy storagePolicy) {
-    return chooseTarget(numOfReplicas, writer, chosenNodes, returnChosenNodes,
-        excludedNodes, blocksize, storagePolicy);
+    /**
+     *
+     */
+    return chooseTarget(numOfReplicas,
+            writer,
+            chosenNodes,
+            returnChosenNodes,
+            excludedNodes,
+            blocksize,
+            storagePolicy);
   }
 
   @Override
@@ -184,7 +192,9 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
     }
   }
 
-  /** This is the implementation. */
+  /** This is the implementation.
+   *  跟下去实在是太琐碎了，什么时候有空慢慢看吧
+   * */
   private DatanodeStorageInfo[] chooseTarget(int numOfReplicas,
                                     Node writer,
                                     List<DatanodeStorageInfo> chosenStorage,
@@ -212,14 +222,28 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
 
     boolean avoidStaleNodes = (stats != null
         && stats.isAvoidingStaleDataNodesForWrite());
-    final Node localNode = chooseTarget(numOfReplicas, writer, excludedNodes,
-        blocksize, maxNodesPerRack, results, avoidStaleNodes, storagePolicy,
-        EnumSet.noneOf(StorageType.class), results.isEmpty());
+
+    /**
+     * 选择 numOfReplicas 个 datanode
+     */
+    final Node localNode = chooseTarget(
+            numOfReplicas,
+            writer,
+            excludedNodes,
+            blocksize,
+            maxNodesPerRack,
+            results,
+            avoidStaleNodes,
+            storagePolicy,
+            EnumSet.noneOf(StorageType.class),
+            results.isEmpty());
+
     if (!returnChosenNodes) {  
       results.removeAll(chosenStorage);
     }
       
     // sorting nodes to form a pipeline
+    // 把 datanode 排序一下，组成一个 pipeline
     return getPipeline(
         (writer != null && writer instanceof DatanodeDescriptor) ? writer
             : localNode,
@@ -836,6 +860,10 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
       if (writer == null || !clusterMap.contains(writer)) {
         writer = storages[0].getDatanodeDescriptor();
       }
+
+      /**
+       * 做一个循环，调整数组的顺序
+       */
       for(; index < storages.length; index++) {
         DatanodeStorageInfo shortestStorage = storages[index];
         int shortestDistance = clusterMap.getDistance(writer,
@@ -857,6 +885,8 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
         }
         writer = shortestStorage.getDatanodeDescriptor();
       }
+
+
     }
     return storages;
   }

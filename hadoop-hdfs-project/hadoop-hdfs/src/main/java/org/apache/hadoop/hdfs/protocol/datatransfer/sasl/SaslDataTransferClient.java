@@ -181,7 +181,11 @@ public class SaslDataTransferClient {
       throws IOException {
     IOStreamPair ios = checkTrustAndSend(socket.getInetAddress(), underlyingOut,
       underlyingIn, encryptionKeyFactory, accessToken, datanodeId);
-    return ios != null ? ios : new IOStreamPair(underlyingIn, underlyingOut);
+
+    return ios != null ? ios :
+            // 如果不走安全协议，就是简单创建IOStreamPair，把输入和输出流放进去
+            new IOStreamPair(underlyingIn, underlyingOut);
+
   }
 
   /**
