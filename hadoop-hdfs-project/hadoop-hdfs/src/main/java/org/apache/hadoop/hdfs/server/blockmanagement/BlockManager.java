@@ -1552,7 +1552,7 @@ public class BlockManager {
 
   /**
    * Choose target datanodes for creating a new block.
-   * 
+   * 为新的block分配存储的 datanodes
    * @throws IOException
    *           if the number of targets < minimum replication.
    * @see BlockPlacementPolicy#chooseTarget(String, int, Node,
@@ -1564,14 +1564,24 @@ public class BlockManager {
       final long blocksize,
       final List<String> favoredNodes,
       final byte storagePolicyID) throws IOException {
+
     List<DatanodeDescriptor> favoredDatanodeDescriptors = 
         getDatanodeDescriptors(favoredNodes);
     final BlockStoragePolicy storagePolicy = storagePolicySuite.getPolicy(storagePolicyID);
 
-    // BlockPlacementPolicy 是一个专门的组件，决定block分配到哪里的
-    final DatanodeStorageInfo[] targets = blockplacement.chooseTarget(src,
-        numOfReplicas, client, excludedNodes, blocksize, 
-        favoredDatanodeDescriptors, storagePolicy);
+
+    /**
+     *  BlockPlacementPolicy 是一个专门的组件，决定block分配到哪里的
+     */
+    final DatanodeStorageInfo[] targets = blockplacement.chooseTarget(
+                src,
+                numOfReplicas,
+                client,
+                excludedNodes,
+                blocksize,
+                favoredDatanodeDescriptors,
+                storagePolicy);
+
 
     if (targets.length < minReplication) {
       throw new IOException("File " + src + " could only be replicated to "

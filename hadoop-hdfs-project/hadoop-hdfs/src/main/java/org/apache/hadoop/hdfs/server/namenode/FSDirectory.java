@@ -432,6 +432,7 @@ public class FSDirectory implements Closeable {
       DatanodeStorageInfo[] targets) throws IOException {
     writeLock();
     try {
+      // 找到路劲下的最后一个INodeFile
       final INodeFile fileINode = inodesInPath.getLastINode().asFile();
       Preconditions.checkState(fileINode.isUnderConstruction());
 
@@ -439,13 +440,16 @@ public class FSDirectory implements Closeable {
       updateCount(inodesInPath, 0, fileINode.getBlockDiskspace(), true);
 
       // associate new last block for the file
-      BlockInfoUnderConstruction blockInfo =
-        new BlockInfoUnderConstruction(
+      //
+      BlockInfoUnderConstruction blockInfo = new BlockInfoUnderConstruction(
             block,
             fileINode.getFileReplication(),
             BlockUCState.UNDER_CONSTRUCTION,
             targets);
+
+      // 放到 BlockManager 中的 BlocksMap 数据结构里
       getBlockManager().addBlockCollection(blockInfo, fileINode);
+      // 把 block 挂到文件INodeFile下
       fileINode.addBlock(blockInfo);
 
       if(NameNode.stateChangeLog.isDebugEnabled()) {
@@ -454,6 +458,8 @@ public class FSDirectory implements Closeable {
             + " block is added to the in-memory "
             + "file system");
       }
+
+
       return blockInfo;
     } finally {
       writeUnlock();

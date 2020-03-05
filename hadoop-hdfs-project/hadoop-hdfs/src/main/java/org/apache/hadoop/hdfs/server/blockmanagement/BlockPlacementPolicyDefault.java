@@ -106,8 +106,16 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
                                     Set<Node> excludedNodes,
                                     long blocksize,
                                     final BlockStoragePolicy storagePolicy) {
-    return chooseTarget(numOfReplicas, writer, chosenNodes, returnChosenNodes,
-        excludedNodes, blocksize, storagePolicy);
+    /**
+     *
+     */
+    return chooseTarget(numOfReplicas,
+            writer,
+            chosenNodes,
+            returnChosenNodes,
+            excludedNodes,
+            blocksize,
+            storagePolicy);
   }
 
   @Override
@@ -184,7 +192,9 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
     }
   }
 
-  /** This is the implementation. */
+  /** This is the implementation.
+   *  跟下去实在是太琐碎了，什么时候有空慢慢看吧
+   * */
   private DatanodeStorageInfo[] chooseTarget(int numOfReplicas,
                                     Node writer,
                                     List<DatanodeStorageInfo> chosenStorage,
@@ -199,9 +209,7 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
     if (excludedNodes == null) {
       excludedNodes = new HashSet<Node>();
     }
-     // 这个地方把握住两点
-    // 1 尽量保证各个节点的数据量是均衡的
-    // 2 机架感知功能
+     
     int[] result = getMaxNodesPerRack(chosenStorage.size(), numOfReplicas);
     numOfReplicas = result[0];
     int maxNodesPerRack = result[1];
@@ -216,16 +224,26 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
         && stats.isAvoidingStaleDataNodesForWrite());
 
     /**
-     *
+     * 选择 numOfReplicas 个 datanode
      */
-    final Node localNode = chooseTarget(numOfReplicas, writer, excludedNodes,
-        blocksize, maxNodesPerRack, results, avoidStaleNodes, storagePolicy,
-        EnumSet.noneOf(StorageType.class), results.isEmpty());
+    final Node localNode = chooseTarget(
+            numOfReplicas,
+            writer,
+            excludedNodes,
+            blocksize,
+            maxNodesPerRack,
+            results,
+            avoidStaleNodes,
+            storagePolicy,
+            EnumSet.noneOf(StorageType.class),
+            results.isEmpty());
+
     if (!returnChosenNodes) {  
       results.removeAll(chosenStorage);
     }
       
     // sorting nodes to form a pipeline
+    // 把 datanode 排序一下，组成一个 pipeline
     return getPipeline(
         (writer != null && writer instanceof DatanodeDescriptor) ? writer
             : localNode,
@@ -842,6 +860,10 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
       if (writer == null || !clusterMap.contains(writer)) {
         writer = storages[0].getDatanodeDescriptor();
       }
+
+      /**
+       * 做一个循环，调整数组的顺序
+       */
       for(; index < storages.length; index++) {
         DatanodeStorageInfo shortestStorage = storages[index];
         int shortestDistance = clusterMap.getDistance(writer,
@@ -863,6 +885,8 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
         }
         writer = shortestStorage.getDatanodeDescriptor();
       }
+
+
     }
     return storages;
   }

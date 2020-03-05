@@ -74,12 +74,14 @@ public abstract class Receiver implements DataTransferProtocol {
       opReadBlock();
       break;
 
+
       /**
-       * 处理写请求
+       * 处理写请求，上游的写数据请求
        */
     case WRITE_BLOCK:
       opWriteBlock(in);
       break;
+
 
     case REPLACE_BLOCK:
       opReplaceBlock(in);
@@ -144,22 +146,23 @@ public abstract class Receiver implements DataTransferProtocol {
 
     try {
 
-      writeBlock(PBHelper.convert(proto.getHeader().getBaseHeader().getBlock()),
-          PBHelper.convertStorageType(proto.getStorageType()),
-          PBHelper.convert(proto.getHeader().getBaseHeader().getToken()),
-          proto.getHeader().getClientName(),
-          targets,
-          PBHelper.convertStorageTypes(proto.getTargetStorageTypesList(), targets.length),
-          PBHelper.convert(proto.getSource()),
-          fromProto(proto.getStage()),
-          proto.getPipelineSize(),
-          proto.getMinBytesRcvd(), proto.getMaxBytesRcvd(),
-          proto.getLatestGenerationStamp(),
-          fromProto(proto.getRequestedChecksum()),
-          (proto.hasCachingStrategy() ?
-              getCachingStrategy(proto.getCachingStrategy()) :
-            CachingStrategy.newDefaultStrategy()),
-            (proto.hasAllowLazyPersist() ? proto.getAllowLazyPersist() : false));
+      writeBlock(
+              PBHelper.convert(proto.getHeader().getBaseHeader().getBlock()),
+              PBHelper.convertStorageType(proto.getStorageType()),
+              PBHelper.convert(proto.getHeader().getBaseHeader().getToken()),
+              proto.getHeader().getClientName(),
+              targets,
+              PBHelper.convertStorageTypes(proto.getTargetStorageTypesList(), targets.length),
+              PBHelper.convert(proto.getSource()),
+              fromProto(proto.getStage()),
+              proto.getPipelineSize(),
+              proto.getMinBytesRcvd(), proto.getMaxBytesRcvd(),
+              proto.getLatestGenerationStamp(),
+              fromProto(proto.getRequestedChecksum()),
+              (proto.hasCachingStrategy() ?
+                      getCachingStrategy(proto.getCachingStrategy()) :
+                      CachingStrategy.newDefaultStrategy()),
+              (proto.hasAllowLazyPersist() ? proto.getAllowLazyPersist() : false));
 
      } finally {
       if (traceScope != null) traceScope.close();
