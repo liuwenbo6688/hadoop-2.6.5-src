@@ -809,12 +809,14 @@ class DataXceiver extends Receiver implements Runnable {
       }
 
       // send connect-ack to source for clients and not transfer-RBW/Finalized
+      // 发送 connect 的ack响应
       if (isClient && !isTransfer) {
         if (LOG.isDebugEnabled() || mirrorInStatus != SUCCESS) {
           LOG.info("Datanode " + targets.length +
                    " forwarding connect ack to upstream firstbadlink is " +
                    firstBadLink);
         }
+        //
         BlockOpResponseProto.newBuilder()
           .setStatus(mirrorInStatus)
           .setFirstBadLink(firstBadLink)

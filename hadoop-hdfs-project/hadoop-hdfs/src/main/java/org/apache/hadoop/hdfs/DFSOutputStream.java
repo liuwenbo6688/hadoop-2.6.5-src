@@ -771,7 +771,7 @@ public class DFSOutputStream extends FSOutputSummer
             synchronized (dataQueue) {
               while (!streamerClosed
                       && !hasError
-                      // ackQueue == 0 才意味着都确认成功了
+                      // ackQueue == 0 ，ack队列全部都被确认了，才意味着这个block都确认成功了
                       && ackQueue.size() != 0
                       && dfsClient.clientRunning) {
                 try {

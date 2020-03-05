@@ -1064,6 +1064,13 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     FsVolumeImpl v;
     while (true) {
       try {
+
+        /**
+         * 一个FsVolume相当磁盘上的一组文件，包含了一组文件
+         * 一个datanode上可能有多个 FsVolume
+         *
+         *  这边就是先选择一个文件组出来
+         */
         if (allowLazyPersist) {
           // First try to place the block on a transient volume.
           v = volumes.getNextTransientVolume(b.getNumBytes());
@@ -1071,6 +1078,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
         } else {
           v = volumes.getNextVolume(storageType, b.getNumBytes());
         }
+
       } catch (DiskOutOfSpaceException de) {
         if (allowLazyPersist) {
           datanode.getMetrics().incrRamDiskBlocksWriteFallback();

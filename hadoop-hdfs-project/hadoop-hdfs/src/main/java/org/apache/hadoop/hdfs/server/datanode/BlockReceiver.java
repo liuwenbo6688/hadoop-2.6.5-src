@@ -141,6 +141,7 @@ class BlockReceiver implements Closeable {
   private long lastSentTime;
   private long maxSendIdleTime;
 
+  //一个block 对应一个 BlockReceiver组件
   BlockReceiver(final ExtendedBlock block, final StorageType storageType,
       final DataInputStream in,
       final String inAddr, final String myAddr,
@@ -201,17 +202,19 @@ class BlockReceiver implements Closeable {
 
         switch (stage) {
 
-          /**
-           * 刚开始的阶段应该是  PIPELINE_SETUP_CREATE
-           */
+        /**
+         * 刚开始的阶段应该是  PIPELINE_SETUP_CREATE
+         */
         case PIPELINE_SETUP_CREATE:
           // FsDatasetSpi 是专门管理本地磁盘文件的
           // 创建一个本地的磁盘文件
           replicaInfo = datanode.data.createRbw(storageType, block, allowLazyPersist);
-          //
+
+          // 通知namenode自己在接收block
           datanode.notifyNamenodeReceivingBlock(
               block, replicaInfo.getStorageUuid());
           break;
+
 
         case PIPELINE_SETUP_STREAMING_RECOVERY:
           replicaInfo = datanode.data.recoverRbw(
