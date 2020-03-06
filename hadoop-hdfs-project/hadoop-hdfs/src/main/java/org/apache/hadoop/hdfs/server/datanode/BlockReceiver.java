@@ -259,7 +259,13 @@ class BlockReceiver implements Closeable {
       
       final boolean isCreate = isDatanode || isTransfer 
           || stage == BlockConstructionStage.PIPELINE_SETUP_CREATE;
+
+      /**
+       *  创建 block文件和meta校验文件的输出流
+       */
       streams = replicaInfo.createStreams(isCreate, requestedChecksum);
+
+
       assert streams != null : "null streams!";
 
       // read checksum meta information

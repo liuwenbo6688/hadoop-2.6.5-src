@@ -682,6 +682,7 @@ class DataXceiver extends Receiver implements Runnable {
 
 
       /**
+       * 第一步：
        * 这边干的第一件事情，就是初始化这个 BlockReceiver
        */
       if (isDatanode || 
@@ -749,6 +750,7 @@ class DataXceiver extends Receiver implements Runnable {
 
           // Do not propagate allowLazyPersist to downstream DataNodes.
           /**
+           *  第二步：
            *  向下一个datanode写一个空块
            *  下游节点也会一样，本地创建一个磁盘文件然后再往下游发送空块，这样一直建立好这个管道流 pipeline
            */
@@ -767,6 +769,9 @@ class DataXceiver extends Receiver implements Runnable {
           mirrorOut.flush();
 
           // read connect ack (only for clients, not for replication req)
+          /**
+           *  等待第二步的结果，连接的ack确认
+           */
           if (isClient) {
             BlockOpResponseProto connectAck =
               BlockOpResponseProto.parseFrom(PBHelper.vintPrefixed(mirrorIn));
@@ -827,6 +832,7 @@ class DataXceiver extends Receiver implements Runnable {
 
       // receive the block and mirror to the next target
       /**
+       * 第三步：
        * 接收上游节点的block，发送到下一个节点
        */
       if (blockReceiver != null) {

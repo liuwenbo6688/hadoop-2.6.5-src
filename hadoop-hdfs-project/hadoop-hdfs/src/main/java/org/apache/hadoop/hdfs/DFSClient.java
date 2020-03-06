@@ -506,6 +506,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
       datanodeRestartTimeout = conf.getLong(
           DFS_CLIENT_DATANODE_RESTART_TIMEOUT_KEY,
           DFS_CLIENT_DATANODE_RESTART_TIMEOUT_DEFAULT) * 1000;
+      // dfs.client.slow.io.warning.threshold.ms,默认 30000 毫秒 | 30秒
       dfsclientSlowIoWarningThresholdMs = conf.getLong(
           DFSConfigKeys.DFS_CLIENT_SLOW_IO_WARNING_THRESHOLD_KEY,
           DFSConfigKeys.DFS_CLIENT_SLOW_IO_WARNING_THRESHOLD_DEFAULT);

@@ -616,12 +616,19 @@ public class DFSOutputStream extends FSOutputSummer
 
     /**
      * Initialize for data streaming
+     * 每次开始传输一个新的block，就会调用一次 initDataStreaming
      */
     private void initDataStreaming() {
-      this.setName("DataStreamer for file " + src +
-          " block " + block);
+      this.setName("DataStreamer for file " + src + " block " + block);
+
+      /**
+       * 启动一个 ResponseProcessor线程，负责处理响应的
+       * 也是一个block对应一个  ResponseProcessor
+       */
       response = new ResponseProcessor(nodes);
       response.start();
+
+      // 状态置为  DATA_STREAMING
       stage = BlockConstructionStage.DATA_STREAMING;
     }
     
@@ -1031,10 +1038,10 @@ public class DFSOutputStream extends FSOutputSummer
       return false;
     }
 
-    //
+    // ==============================================================================================
     // Processes responses from the datanodes.  A packet is removed
     // from the ackQueue when its response arrives.
-    //
+    // 接收从datanode返回的请求，当packet的确认请求到达后，把packet从ack队列中删除
     private class ResponseProcessor extends Daemon {
 
       private volatile boolean responderClosed = false;
@@ -1056,9 +1063,14 @@ public class DFSOutputStream extends FSOutputSummer
           try {
             // read an ack from the pipeline
             long begin = Time.monotonicNow();
+
+            /**
+             *  从下游节点对应的输入流中读取确认信息
+             */
             ack.readFields(blockReplyStream);
+
             long duration = Time.monotonicNow() - begin;
-            if (duration > dfsclientSlowLogThresholdMs
+            if (duration > dfsclientSlowLogThresholdMs // 30秒
                 && ack.getSeqno() != Packet.HEART_BEAT_SEQNO) {
               DFSClient.LOG
                   .warn("Slow ReadProcessor read fields took " + duration
@@ -1068,9 +1080,13 @@ public class DFSOutputStream extends FSOutputSummer
               DFSClient.LOG.debug("DFSClient " + ack);
             }
 
-            long seqno = ack.getSeqno();
+            long seqno = ack.getSeqno();//
+
+
+
             // processes response status from datanodes.
             for (int i = ack.getNumOfReplies()-1; i >=0  && dfsClient.clientRunning; i--) {
+              // 每个节点的状态都取出来，说明返回的时候，能都拿到下游所有节点的状态了
               final Status reply = ack.getReply(i);
               // Restart will not be treated differently unless it is
               // the local node or the only one in the pipeline.
@@ -1085,13 +1101,17 @@ public class DFSOutputStream extends FSOutputSummer
               }
               // node error
               if (reply != SUCCESS) {
-                setErrorIndex(i); // first bad datanode
+                setErrorIndex(i); // first bad datanode // 定位到第几个节点除了问题
                 throw new IOException("Bad response " + reply +
                     " for block " + block +
-                    " from datanode " + 
+                    " from datanode " +
                     targets[i]);
               }
             }
+
+
+
+
             
             assert seqno != PipelineAck.UNKOWN_SEQNO : 
               "Ack for unknown seqno should be a failed ack: " + ack;
@@ -1126,6 +1146,7 @@ public class DFSOutputStream extends FSOutputSummer
             synchronized (dataQueue) {
               lastAckedSeqno = seqno;
               pipelineRecoveryCount = 0;
+              // 从 ackQueue 中移除
               ackQueue.removeFirst();
               dataQueue.notifyAll();
 
@@ -1158,6 +1179,10 @@ public class DFSOutputStream extends FSOutputSummer
         this.interrupt();
       }
     }
+    // ==============================================================================================
+
+
+
 
     // If this stream has encountered any errors so far, shutdown 
     // threads and mark stream as closed. Returns true if we should

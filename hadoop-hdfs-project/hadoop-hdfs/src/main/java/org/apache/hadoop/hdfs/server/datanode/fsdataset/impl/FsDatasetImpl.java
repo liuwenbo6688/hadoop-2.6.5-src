@@ -1095,8 +1095,17 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     // 创建一个本地磁盘文件
     File f = v.createRbwFile(b.getBlockPoolId(), b.getLocalBlock());
 
-    ReplicaBeingWritten newReplicaInfo = new ReplicaBeingWritten(b.getBlockId(), 
-        b.getGenerationStamp(), v, f.getParentFile(), b.getNumBytes());
+    /**
+     *
+     */
+    ReplicaBeingWritten newReplicaInfo = new ReplicaBeingWritten(
+            b.getBlockId(),
+            b.getGenerationStamp(),
+            v,
+            f.getParentFile(),
+            b.getNumBytes());
+
+
     volumeMap.add(b.getBlockPoolId(), newReplicaInfo);
 
     return newReplicaInfo;
