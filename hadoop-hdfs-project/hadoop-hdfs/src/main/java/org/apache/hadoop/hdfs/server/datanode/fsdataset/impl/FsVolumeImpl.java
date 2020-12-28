@@ -50,6 +50,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
  * The underlying volume used to store replica.
  * 
  * It uses the {@link FsDatasetImpl} object for synchronization.
+ * 代表一块盘
  */
 @InterfaceAudience.Private
 @VisibleForTesting
@@ -429,7 +430,7 @@ public class FsVolumeImpl implements FsVolumeSpi {
   }
   
   DatanodeStorage toDatanodeStorage() {
-    return new DatanodeStorage(storageID, DatanodeStorage.State.NORMAL, storageType);
+    return new DatanodeStorage(storageID, DatanodeStorage.State.NORMAL, storageType /* 异构存储 */);
   }
 }
 

@@ -97,6 +97,9 @@ public class RetriableFileCopyCommand extends RetriableCommand {
     Mapper.Context context = (Mapper.Context)arguments[2];
     EnumSet<FileAttribute> fileAttributes
             = (EnumSet<FileAttribute>)arguments[3];
+    /**
+     *
+     */
     return doCopy(source, target, context, fileAttributes);
   }
 
@@ -121,6 +124,9 @@ public class RetriableFileCopyCommand extends RetriableCommand {
 
       final long offset = action == FileAction.APPEND ? targetFS.getFileStatus(
           target).getLen() : 0;
+      /**
+       *
+       */
       long bytesRead = copyToFile(targetPath, targetFS, sourceFileStatus,
           offset, context, fileAttributes, sourceChecksum);
 
@@ -172,15 +178,24 @@ public class RetriableFileCopyCommand extends RetriableCommand {
           targetFS, targetPath);
       final long blockSize = getBlockSize(fileAttributes, sourceFileStatus,
           targetFS, targetPath);
+
+      /**
+       *
+       */
       FSDataOutputStream out = targetFS.create(targetPath, permission,
           EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE),
           BUFFER_SIZE, repl, blockSize, context,
           getChecksumOpt(fileAttributes, sourceChecksum));
+
       outStream = new BufferedOutputStream(out);
+
     } else {
       outStream = new BufferedOutputStream(targetFS.append(targetPath,
           BUFFER_SIZE));
     }
+    /**
+     *
+     */
     return copyBytes(sourceFileStatus, sourceOffset, outStream, BUFFER_SIZE,
         context);
   }
@@ -246,6 +261,10 @@ public class RetriableFileCopyCommand extends RetriableCommand {
 
     try {
       inStream = getInputStream(source, context.getConfiguration());
+
+      /**
+       * 流对拷
+       */
       int bytesRead = readBytes(inStream, buf, sourceOffset);
       while (bytesRead >= 0) {
         totalBytesRead += bytesRead;
@@ -256,6 +275,7 @@ public class RetriableFileCopyCommand extends RetriableCommand {
         updateContextStatus(totalBytesRead, context, sourceFileStatus);
         bytesRead = readBytes(inStream, buf, sourceOffset);
       }
+
       outStream.close();
       outStream = null;
     } finally {
@@ -297,6 +317,7 @@ public class RetriableFileCopyCommand extends RetriableCommand {
       long bandwidthMB = conf.getInt(DistCpConstants.CONF_LABEL_BANDWIDTH_MB,
               DistCpConstants.DEFAULT_BANDWIDTH_MB);
       FSDataInputStream in = fs.open(path);
+      // 限流
       return new ThrottledInputStream(in, bandwidthMB * 1024 * 1024);
     }
     catch (IOException e) {

@@ -346,6 +346,7 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
         .chooseStorageTypes((short) totalReplicasExpected,
             DatanodeStorageInfo.toStorageTypes(results),
             unavailableStorages, newBlock);
+
     final EnumMap<StorageType, Integer> storageTypes =
         getRequiredStorageTypes(requiredStorageTypes);
     if (LOG.isTraceEnabled()) {

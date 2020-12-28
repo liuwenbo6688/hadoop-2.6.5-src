@@ -454,7 +454,9 @@ public class DatanodeDescriptor extends DatanodeInfo {
 
     this.volumeFailures = volFailures;
     for (StorageReport report : reports) {
+      // 更新存储架构
       DatanodeStorageInfo storage = updateStorage(report.getStorage());
+
       if (checkFailedStorages) {
         failedStorageInfos.remove(storage);
       }

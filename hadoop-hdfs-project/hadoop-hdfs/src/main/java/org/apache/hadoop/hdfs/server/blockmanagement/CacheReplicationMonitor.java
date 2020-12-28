@@ -186,7 +186,12 @@ public class CacheReplicationMonitor extends Thread implements Closeable {
         }
         startTimeMs = curTimeMs;
         mark = !mark;
+
+        /**
+         *
+         */
         rescan();
+
         curTimeMs = Time.monotonicNow();
         // Update synchronization-related variables.
         lock.lock();
@@ -298,8 +303,16 @@ public class CacheReplicationMonitor extends Thread implements Closeable {
       }
 
       resetStatistics();
+      /**
+       *
+       */
       rescanCacheDirectives();
+
+      /**
+       *
+       */
       rescanCachedBlockMap();
+
       blockManager.getDatanodeManager().resetLastCachingDirectiveSentTime();
     } finally {
       namesystem.writeUnlock();
@@ -322,6 +335,10 @@ public class CacheReplicationMonitor extends Thread implements Closeable {
   private void rescanCacheDirectives() {
     FSDirectory fsDir = namesystem.getFSDirectory();
     final long now = new Date().getTime();
+
+    /**
+     * 遍历所有的缓存指令
+     */
     for (CacheDirective directive : cacheManager.getCacheDirectives()) {
       scannedDirectives++;
       // Skip processing this entry if it has expired
@@ -350,16 +367,24 @@ public class CacheReplicationMonitor extends Thread implements Closeable {
             .getChildrenList(Snapshot.CURRENT_STATE_ID);
         for (INode child : children) {
           if (child.isFile()) {
+            /**
+             *
+             */
             rescanFile(directive, child.asFile());
           }
         }
       } else if (node.isFile()) {
+        /**
+         *
+         */
         rescanFile(directive, node.asFile());
       } else {
         LOG.debug("Directive {}: ignoring non-directive, non-file inode {} ",
             directive.getId(), node);
       }
     }
+
+
   }
   
   /**
@@ -369,7 +394,7 @@ public class CacheReplicationMonitor extends Thread implements Closeable {
    * @param file The file.
    */
   private void rescanFile(CacheDirective directive, INodeFile file) {
-    BlockInfo[] blockInfos = file.getBlocks();
+    BlockInfo[] blockInfos = file.getBlocks(); // 缓存的文件所有的 block
 
     // Increment the "needed" statistics
     directive.addFilesNeeded(1);
@@ -394,7 +419,11 @@ public class CacheReplicationMonitor extends Thread implements Closeable {
     }
 
     long cachedTotal = 0;
+
     for (BlockInfo blockInfo : blockInfos) {
+      /**
+       * 遍历这些block，放到内存 cachedBlocks 中
+       */
       if (!blockInfo.getBlockUCState().equals(BlockUCState.COMPLETE)) {
         // We don't try to cache blocks that are under construction.
         LOG.trace("Directive {}: can't cache block {} because it is in state "
@@ -443,6 +472,7 @@ public class CacheReplicationMonitor extends Thread implements Closeable {
       LOG.trace("Directive {}: setting replication for block {} to {}",
           directive.getId(), blockInfo, ocblock.getReplication());
     }
+
     // Increment the "cached" statistics
     directive.addBytesCached(cachedTotal);
     if (cachedTotal == neededTotal) {
@@ -492,34 +522,33 @@ public class CacheReplicationMonitor extends Thread implements Closeable {
    */
   private void rescanCachedBlockMap() {
     for (Iterator<CachedBlock> cbIter = cachedBlocks.iterator();
-        cbIter.hasNext(); ) {
+         cbIter.hasNext(); ) {
       scannedBlocks++;
       CachedBlock cblock = cbIter.next();
-      List<DatanodeDescriptor> pendingCached =
-          cblock.getDatanodes(Type.PENDING_CACHED);
-      List<DatanodeDescriptor> cached =
-          cblock.getDatanodes(Type.CACHED);
-      List<DatanodeDescriptor> pendingUncached =
-          cblock.getDatanodes(Type.PENDING_UNCACHED);
+
+      List<DatanodeDescriptor> pendingCached = cblock.getDatanodes(Type.PENDING_CACHED);
+      List<DatanodeDescriptor> cached = cblock.getDatanodes(Type.CACHED);
+      List<DatanodeDescriptor> pendingUncached = cblock.getDatanodes(Type.PENDING_UNCACHED);
+
       // Remove nodes from PENDING_UNCACHED if they were actually uncached.
       for (Iterator<DatanodeDescriptor> iter = pendingUncached.iterator();
-          iter.hasNext(); ) {
+           iter.hasNext(); ) {
         DatanodeDescriptor datanode = iter.next();
         if (!cblock.isInList(datanode.getCached())) {
           LOG.trace("Block {}: removing from PENDING_UNCACHED for node {} "
-              + "because the DataNode uncached it.", cblock.getBlockId(),
-              datanode.getDatanodeUuid());
+                          + "because the DataNode uncached it.", cblock.getBlockId(),
+                  datanode.getDatanodeUuid());
           datanode.getPendingUncached().remove(cblock);
           iter.remove();
         }
       }
       BlockInfo blockInfo = blockManager.
-            getStoredBlock(new Block(cblock.getBlockId()));
+              getStoredBlock(new Block(cblock.getBlockId()));
       String reason = findReasonForNotCaching(cblock, blockInfo);
       int neededCached = 0;
       if (reason != null) {
         LOG.trace("Block {}: can't cache block because it is {}",
-            cblock.getBlockId(), reason);
+                cblock.getBlockId(), reason);
       } else {
         neededCached = cblock.getReplication();
       }
@@ -527,52 +556,52 @@ public class CacheReplicationMonitor extends Thread implements Closeable {
       if (numCached >= neededCached) {
         // If we have enough replicas, drop all pending cached.
         for (Iterator<DatanodeDescriptor> iter = pendingCached.iterator();
-            iter.hasNext(); ) {
+             iter.hasNext(); ) {
           DatanodeDescriptor datanode = iter.next();
           datanode.getPendingCached().remove(cblock);
           iter.remove();
           LOG.trace("Block {}: removing from PENDING_CACHED for node {}"
-                  + "because we already have {} cached replicas and we only" +
-                  " need {}",
-              cblock.getBlockId(), datanode.getDatanodeUuid(), numCached,
-              neededCached
+                          + "because we already have {} cached replicas and we only" +
+                          " need {}",
+                  cblock.getBlockId(), datanode.getDatanodeUuid(), numCached,
+                  neededCached
           );
         }
       }
       if (numCached < neededCached) {
         // If we don't have enough replicas, drop all pending uncached.
         for (Iterator<DatanodeDescriptor> iter = pendingUncached.iterator();
-            iter.hasNext(); ) {
+             iter.hasNext(); ) {
           DatanodeDescriptor datanode = iter.next();
           datanode.getPendingUncached().remove(cblock);
           iter.remove();
           LOG.trace("Block {}: removing from PENDING_UNCACHED for node {} "
-                  + "because we only have {} cached replicas and we need " +
-                  "{}", cblock.getBlockId(), datanode.getDatanodeUuid(),
-              numCached, neededCached
+                          + "because we only have {} cached replicas and we need " +
+                          "{}", cblock.getBlockId(), datanode.getDatanodeUuid(),
+                  numCached, neededCached
           );
         }
       }
       int neededUncached = numCached -
-          (pendingUncached.size() + neededCached);
+              (pendingUncached.size() + neededCached);
       if (neededUncached > 0) {
         addNewPendingUncached(neededUncached, cblock, cached,
-            pendingUncached);
+                pendingUncached);
       } else {
         int additionalCachedNeeded = neededCached -
-            (numCached + pendingCached.size());
+                (numCached + pendingCached.size());
         if (additionalCachedNeeded > 0) {
           addNewPendingCached(additionalCachedNeeded, cblock, cached,
-              pendingCached);
+                  pendingCached);
         }
       }
       if ((neededCached == 0) &&
-          pendingUncached.isEmpty() &&
-          pendingCached.isEmpty()) {
+              pendingUncached.isEmpty() &&
+              pendingCached.isEmpty()) {
         // we have nothing more to do with this block.
         LOG.trace("Block {}: removing from cachedBlocks, since neededCached "
-                + "== 0, and pendingUncached and pendingCached are empty.",
-            cblock.getBlockId()
+                        + "== 0, and pendingUncached and pendingCached are empty.",
+                cblock.getBlockId()
         );
         cbIter.remove();
       }

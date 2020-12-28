@@ -155,7 +155,11 @@ public class DistCp extends Configured implements Tool {
         metaFolder = createMetaFolderPath();
         jobFS = metaFolder.getFileSystem(getConf());
 
+        /**
+         *
+         */
         job = createJob();
+
       }
       createInputFileListing(job);
 
@@ -207,7 +211,11 @@ public class DistCp extends Configured implements Tool {
     job.setJarByClass(CopyMapper.class);
     configureOutputFormat(job);
 
+    /**
+     *
+     */
     job.setMapperClass(CopyMapper.class);
+
     job.setNumReduceTasks(0);
     job.setMapOutputKeyClass(Text.class);
     job.setMapOutputValueClass(Text.class);

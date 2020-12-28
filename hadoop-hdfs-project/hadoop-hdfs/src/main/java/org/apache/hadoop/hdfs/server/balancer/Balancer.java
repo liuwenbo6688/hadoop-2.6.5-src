@@ -397,15 +397,21 @@ public class Balancer {
    * the others are target nodes with (utilization < Avg).
    */
   private <G extends StorageGroup, C extends StorageGroup>
-      void chooseStorageGroups(Collection<G> groups, Collection<C> candidates,
-          Matcher matcher) {
+      void chooseStorageGroups(Collection<G> groups,
+                               Collection<C> candidates,
+                               Matcher matcher) {
+
     for(final Iterator<G> i = groups.iterator(); i.hasNext();) {
       final G g = i.next();
+      /**
+       *
+       */
       for(; choose4One(g, candidates, matcher); );
       if (!g.hasSpaceForScheduling()) {
         i.remove();
       }
     }
+
   }
 
   /**
@@ -432,10 +438,21 @@ public class Balancer {
   }
   
   private void matchSourceWithTargetToMove(Source source, StorageGroup target) {
+    // 要挪动多少数据
     long size = Math.min(source.availableSizeToMove(), target.availableSizeToMove());
+
+    /**
+     *
+     */
     final Task task = new Task(target, size);
     source.addTask(task);
+
+
     target.incScheduledSize(task.getSize());
+
+    /**
+     *
+     */
     dispatcher.add(source, target);
     LOG.info("Decided to move "+StringUtils.byteDesc(size)+" bytes from "
         + source.getDisplayName() + " to " + target.getDisplayName());
@@ -518,6 +535,9 @@ public class Balancer {
        * in this iteration. Maximum bytes to be moved per node is
        * Min(1 Band worth of bytes,  MAX_SIZE_TO_MOVE).
        */
+      /**
+       *
+       */
       final long bytesBeingMoved = chooseStorageGroups();
       if (bytesBeingMoved == 0) {
         System.out.println("No block can be moved. Exiting...");
@@ -581,7 +601,11 @@ public class Balancer {
         Collections.shuffle(connectors);
         for(NameNodeConnector nnc : connectors) {
           final Balancer b = new Balancer(nnc, p, conf);
+          /**
+           *
+           */
           final Result r = b.runOneIteration();
+
           r.print(iteration, System.out);
 
           // clean all lists

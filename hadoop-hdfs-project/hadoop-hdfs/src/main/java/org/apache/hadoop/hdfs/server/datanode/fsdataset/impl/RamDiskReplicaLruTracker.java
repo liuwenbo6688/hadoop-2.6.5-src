@@ -66,6 +66,7 @@ public class RamDiskReplicaLruTracker extends RamDiskReplicaTracker {
 
   /**
    * Map of persisted replicas ordered by their last use times.
+   * 按时间最近使用的时间排序
    */
   TreeMultimap<Long, RamDiskReplicaLru> replicasPersisted;
 
@@ -168,6 +169,10 @@ public class RamDiskReplicaLruTracker extends RamDiskReplicaTracker {
 
   @Override
   synchronized RamDiskReplicaLru getNextCandidateForEviction() {
+
+    /**
+     * replicasPersisted 是按最近使用的时间排序的
+     */
     final Iterator<RamDiskReplicaLru> it = replicasPersisted.values().iterator();
     while (it.hasNext()) {
       final RamDiskReplicaLru ramDiskReplicaLru = it.next();

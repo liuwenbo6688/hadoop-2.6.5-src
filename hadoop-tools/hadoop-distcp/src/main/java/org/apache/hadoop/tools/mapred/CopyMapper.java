@@ -242,15 +242,26 @@ public class CopyMapper extends Mapper<Text, CopyListingFileStatus, Text, Text> 
         return;
       }
 
+      // 比较文件，是否可以跳过 SKIP | OVERWRITE | APPEND
       FileAction action = checkUpdate(sourceFS, sourceCurrStatus, target);
+
       if (action == FileAction.SKIP) {
         LOG.info("Skipping copy of " + sourceCurrStatus.getPath()
                  + " to " + target);
         updateSkipCounters(context, sourceCurrStatus);
         context.write(null, new Text("SKIP: " + sourceCurrStatus.getPath()));
       } else {
-        copyFileWithRetry(description, sourceCurrStatus, target, context,
-            action, fileAttributes);
+
+        /**
+         *
+         */
+        copyFileWithRetry(description,
+                sourceCurrStatus,
+                target,
+                context,
+                action,
+                fileAttributes);
+
       }
 
       DistCpUtils.preserve(target.getFileSystem(conf), target, sourceCurrStatus,
@@ -277,8 +288,10 @@ public class CopyMapper extends Mapper<Text, CopyListingFileStatus, Text, Text> 
       throws IOException {
     long bytesCopied;
     try {
-      bytesCopied = (Long) new RetriableFileCopyCommand(skipCrc, description,
-          action).execute(sourceFileStatus, target, context, fileAttributes);
+
+      bytesCopied = (Long) new RetriableFileCopyCommand(skipCrc, description, action)
+              .execute(sourceFileStatus, target, context, fileAttributes);
+
     } catch (Exception e) {
       context.setStatus("Copy Failure: " + sourceFileStatus.getPath());
       throw new IOException("File copy failed: " + sourceFileStatus.getPath() +

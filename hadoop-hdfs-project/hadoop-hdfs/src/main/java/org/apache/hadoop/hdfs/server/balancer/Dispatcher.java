@@ -310,7 +310,11 @@ public class Dispatcher {
         in = new DataInputStream(new BufferedInputStream(unbufIn,
             HdfsConstants.IO_FILE_BUFFER_SIZE));
 
+        /**
+         *  发送replace block的请求
+         */
         sendRequest(out, eb, accessToken);
+
         receiveResponse(in);
         nnc.getBytesMoved().addAndGet(block.getNumBytes());
         LOG.info("Successfully moved " + this);
@@ -343,8 +347,13 @@ public class Dispatcher {
     /** Send a block replace request to the output stream */
     private void sendRequest(DataOutputStream out, ExtendedBlock eb,
         Token<BlockTokenIdentifier> accessToken) throws IOException {
-      new Sender(out).replaceBlock(eb, target.storageType, accessToken,
-          source.getDatanodeInfo().getDatanodeUuid(), proxySource.datanode);
+      new Sender(out)
+              // 发送replace block的请求
+              .replaceBlock(eb,
+                      target.storageType,
+                      accessToken,
+                      source.getDatanodeInfo().getDatanodeUuid(),
+                      proxySource.datanode);
     }
 
     /** Receive a block copy response from the input stream */
@@ -395,7 +404,7 @@ public class Dispatcher {
   /** The class represents a desired move. */
   static class Task {
     private final StorageGroup target;
-    private long size; // bytes scheduled to move
+    private long size; // bytes scheduled to move  要挪动多少数据
 
     Task(StorageGroup target, long size) {
       this.target = target;
@@ -664,7 +673,11 @@ public class Dispatcher {
         final DDatanode target = task.target.getDDatanode();
         final PendingMove pendingBlock = new PendingMove(this, task.target);
         if (target.addPendingBlock(pendingBlock)) {
+
           // target is not busy, so do a tentative block allocation
+          /**
+           *
+           */
           if (pendingBlock.chooseBlockAndProxy()) {
             long blockSize = pendingBlock.block.getNumBytes();
             incScheduledSize(-blockSize);
@@ -720,11 +733,20 @@ public class Dispatcher {
       int noPendingMoveIteration = 0;
       while (!isTimeUp && getScheduledSize() > 0
           && (!srcBlocks.isEmpty() || blocksToReceive > 0)) {
+        /**
+         *
+         */
         final PendingMove p = chooseNextMove();
+
         if (p != null) {
           // Reset no pending move counter
           noPendingMoveIteration=0;
+
+          /**
+           *
+           */
           executePendingMove(p);
+
           continue;
         }
 
@@ -866,17 +888,25 @@ public class Dispatcher {
   }
 
   public void executePendingMove(final PendingMove p) {
-    // move the block
+    // move the block  向move线程池提交
     moveExecutor.execute(new Runnable() {
       @Override
       public void run() {
+        /**
+         *
+         */
         p.dispatch();
       }
     });
   }
 
   public boolean dispatchAndCheckContinue() throws InterruptedException {
-    return nnc.shouldContinue(dispatchBlockMoves());
+    return nnc.shouldContinue(
+            /**
+             *
+             */
+            dispatchBlockMoves()
+    );
   }
 
   /**
@@ -894,9 +924,13 @@ public class Dispatcher {
     final Iterator<Source> i = sources.iterator();
     for (int j = 0; j < futures.length; j++) {
       final Source s = i.next();
+      // 一个soure启动一个线程， 线程池提交
       futures[j] = dispatchExecutor.submit(new Runnable() {
         @Override
         public void run() {
+          /**
+           *
+           */
           s.dispatchBlocks();
         }
       });
@@ -963,6 +997,12 @@ public class Dispatcher {
     if (movedBlocks.contains(block.getBlock())) {
       return false;
     }
+
+    // add by liuwenbo
+    if(block.getNumBytes() < 64 * 1024 * 1024){
+      return false;
+    }
+
     if (block.isLocatedOn(target)) {
       return false;
     }

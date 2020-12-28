@@ -145,6 +145,10 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       List<FsVolumeImpl> curVolumes = getVolumes();
       reports = new StorageReport[curVolumes.size()];
       int i = 0;
+
+      /*
+
+       */
       for (FsVolumeImpl volume : curVolumes) {
         reports[i++] = new StorageReport(volume.toDatanodeStorage(),
                                          false,
@@ -1754,6 +1758,9 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       genstamp = info.getGenerationStamp();
       volumeExecutor = volume.getCacheExecutor();
     }
+    /**
+     *
+     */
     cacheManager.cacheBlock(blockId, bpid, 
         blockFileName, length, genstamp, volumeExecutor);
   }
@@ -2654,6 +2661,9 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
 
       while (iterations++ < MAX_BLOCK_EVICTIONS_PER_ITERATION &&
              transientFreeSpaceBelowThreshold()) {
+        /**
+         *
+         */
         RamDiskReplica replicaState = ramDiskReplicaTracker.getNextCandidateForEviction();
 
         if (replicaState == null) {
@@ -2676,6 +2686,10 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
           metaFile = replicaInfo.getMetaFile();
           blockFileUsed = blockFile.length();
           metaFileUsed = metaFile.length();
+
+          /**
+           * 只清理内存的文件
+           */
           ramDiskReplicaTracker.discardReplica(replicaState.getBlockPoolId(),
               replicaState.getBlockId(), false);
 
@@ -2739,6 +2753,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       while (fsRunning && shouldRun) {
         try {
           numSuccessiveFailures = saveNextReplica() ? 0 : (numSuccessiveFailures + 1);
+          // lru 清理最少使用的block
           evictBlocks();
 
           // Sleep if we have no more work to do or if it looks like we are not

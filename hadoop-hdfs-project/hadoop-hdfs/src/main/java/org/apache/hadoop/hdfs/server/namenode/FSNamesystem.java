@@ -3695,10 +3695,14 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       clientnode = getClientNode(clientMachine);
     }
 
+    /**
+     *
+     */
     // choose new datanodes.
     final DatanodeStorageInfo[] targets = blockManager.chooseTarget4AdditionalDatanode(
         src, numAdditionalNodes, clientnode, chosen, 
         excludes, preferredblocksize, storagePolicyID);
+
     final LocatedBlock lb = new LocatedBlock(blk, targets);
     blockManager.setBlockToken(lb, AccessMode.COPY);
     return lb;
@@ -8857,10 +8861,16 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         throw new IOException("addDirective: you cannot specify an ID " +
             "for this operation.");
       }
+
+      /**
+       *
+       */
       CacheDirectiveInfo effectiveDirective =
           cacheManager.addDirective(directive, pc, flags);
+
       getEditLog().logAddCacheDirectiveInfo(effectiveDirective,
           cacheEntry != null);
+
       result = effectiveDirective.getId();
       effectiveDirectiveStr = effectiveDirective.toString();
       success = true;

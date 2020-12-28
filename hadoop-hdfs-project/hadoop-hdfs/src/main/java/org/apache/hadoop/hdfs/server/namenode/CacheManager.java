@@ -478,6 +478,10 @@ public final class CacheManager {
   // RPC handlers
 
   private void addInternal(CacheDirective directive, CachePool pool) {
+
+    /**
+     * 加到内存的数据结构中
+     */
     boolean addedDirective = pool.getDirectiveList().add(directive);
     assert addedDirective;
     directivesById.put(directive.getId(), directive);
@@ -531,8 +535,14 @@ public final class CacheManager {
       // All validation passed
       // Add a new entry with the next available ID.
       long id = getNextDirectiveId();
+
       directive = new CacheDirective(id, path, replication, expiryTime);
+
+      /**
+       *
+       */
       addInternal(directive, pool);
+
     } catch (IOException e) {
       LOG.warn("addDirective of " + info + " failed: ", e);
       throw e;

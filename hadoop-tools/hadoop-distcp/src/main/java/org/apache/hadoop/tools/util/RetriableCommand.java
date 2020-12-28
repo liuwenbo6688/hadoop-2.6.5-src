@@ -84,6 +84,9 @@ public abstract class RetriableCommand {
     int counter = 0;
     while (true) {
       try {
+        /**
+         *
+         */
         return doExecute(arguments);
       } catch(Exception exception) {
         LOG.error("Failure in Retriable command: " + description, exception);

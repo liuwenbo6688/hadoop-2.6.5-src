@@ -631,10 +631,17 @@ class BPServiceActor implements Runnable {
       lastCacheReport = startTime;
 
       String bpid = bpos.getBlockPoolId();
+      /**
+       * 拿到缓存块
+       */
       List<Long> blockIds = dn.getFSDataset().getCacheReport(bpid);
       long createTime = Time.monotonicNow();
 
+      /**
+       *
+       */
       cmd = bpNamenode.cacheReport(bpRegistration, bpid, blockIds);
+
       long sendTime = Time.monotonicNow();
       long createCost = createTime - startTime;
       long sendCost = sendTime - createTime;

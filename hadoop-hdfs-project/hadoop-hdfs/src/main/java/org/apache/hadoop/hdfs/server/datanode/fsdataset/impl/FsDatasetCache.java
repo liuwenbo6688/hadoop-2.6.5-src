@@ -287,6 +287,7 @@ public class FsDatasetCache {
     }
     mappableBlockMap.put(key, new Value(null, State.CACHING));
     volumeExecutor.execute(
+            //  CachingTask 块缓存任务
         new CachingTask(key, blockFileName, length, genstamp));
     LOG.debug("Initiating caching for Block with id {}, pool {}", blockId,
         bpid);
@@ -388,8 +389,13 @@ public class FsDatasetCache {
           return;
         }
         try {
+
+          /**
+           *
+           */
           mappableBlock = MappableBlock.
               load(length, blockIn, metaIn, blockFileName);
+
         } catch (ChecksumException e) {
           // Exception message is bogus since this wasn't caused by a file read
           LOG.warn("Failed to cache " + key + ": checksum verification failed.");

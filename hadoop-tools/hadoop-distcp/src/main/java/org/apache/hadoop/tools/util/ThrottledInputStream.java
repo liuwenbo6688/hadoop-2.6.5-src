@@ -117,6 +117,7 @@ public class ThrottledInputStream extends InputStream {
   private void throttle() throws IOException {
     if (getBytesPerSec() > maxBytesPerSec) {
       try {
+        // 限流： 超过流量就睡眠一会，这边实现的比较粗糙
         Thread.sleep(SLEEP_DURATION_MS);
         totalSleepTime += SLEEP_DURATION_MS;
       } catch (InterruptedException e) {
