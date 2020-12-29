@@ -1033,6 +1033,9 @@ class NameNodeRpcServer implements NamenodeProtocols {
   @Override // ClientProtocol
   public void refreshNodes() throws IOException {
     checkNNStartup();
+      /**
+       *
+       */
     namesystem.refreshNodes();
   }
 

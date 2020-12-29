@@ -482,8 +482,7 @@ public class FSEditLog implements LogsPurgeable {
     // 整个namenode，同一时间，只能有一个线程进这段代码，去尝试记录edits log
     synchronized (this) {
 
-      assert isOpenForWrite() :
-        "bad state: " + state;
+      assert isOpenForWrite() : "bad state: " + state;
       
       // wait if an automatic sync is scheduled
       waitIfAutoSyncScheduled();
@@ -726,6 +725,11 @@ public class FSEditLog implements LogsPurgeable {
             terminate(1, msg);
           }
         } finally {
+          /**
+           * 交换完缓冲区之后
+           * 释放锁之后，允许堵在写入数据的线程继续写入数据
+           * 然后找个线程就去把缓冲区的数据刷新到磁盘去
+           */
           // Prevent RuntimeException from blocking other log edit write 
           doneWithAutoSyncScheduling();
         }
@@ -734,7 +738,7 @@ public class FSEditLog implements LogsPurgeable {
         logStream = editLogStream;
       }
       
-      // do the sync
+      // --------------------------------- do the sync, flush过程是不持有锁的，不会影响数据的写入 ---------------------------------
       long start = now();
       try {
 
@@ -763,6 +767,9 @@ public class FSEditLog implements LogsPurgeable {
         }
       }
       long elapsed = now() - start;
+      // --------------------------------- do the sync ---------------------------------
+
+
   
       if (metrics != null) { // Metrics non-null only when used inside name node
         metrics.addSync(elapsed);

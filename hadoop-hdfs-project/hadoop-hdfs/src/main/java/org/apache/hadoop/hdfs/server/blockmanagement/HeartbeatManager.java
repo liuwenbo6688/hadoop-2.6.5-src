@@ -230,6 +230,9 @@ class HeartbeatManager implements DatanodeStatistics {
 
   synchronized void startDecommission(final DatanodeDescriptor node) {
     stats.subtract(node);
+    /**
+     * 状态置为 DECOMMISSION_INPROGRESS
+     */
     node.startDecommission();
     stats.add(node);
   }

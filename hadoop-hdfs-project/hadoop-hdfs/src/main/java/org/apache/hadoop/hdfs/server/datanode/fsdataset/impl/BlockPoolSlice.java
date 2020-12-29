@@ -282,7 +282,12 @@ class BlockPoolSlice {
         throw new IOException("Failed to mkdirs " + blockDir);
       }
     }
+
+    /**
+     * 底层就是用的 java.io.File#renameTo方法
+     */
     File blockFile = FsDatasetImpl.moveBlockFiles(b, f, blockDir);
+
     File metaFile = FsDatasetUtil.getMetaFile(blockFile, b.getGenerationStamp());
     dfsUsage.incDfsUsed(b.getNumBytes()+metaFile.length());
     return blockFile;

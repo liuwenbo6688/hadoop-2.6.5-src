@@ -753,4 +753,9 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final String IGNORE_SECURE_PORTS_FOR_TESTING_KEY =
       "ignore.secure.ports.for.testing";
   public static final boolean IGNORE_SECURE_PORTS_FOR_TESTING_DEFAULT = false;
+
+
+  //TODO liuwenbo
+  public static final String  DFS_NAMENODE_OUTPUT_BUFFER_CAPACITY_KEY = "dfs.namenode.output.buffer.capacity";
+  public static final int     DFS_NAMENODE_OUTPUT_BUFFER_CAPACITY_DEFAULT = 52 * 1024;
 }

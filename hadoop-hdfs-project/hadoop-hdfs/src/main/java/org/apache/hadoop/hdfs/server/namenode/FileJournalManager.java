@@ -31,6 +31,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileUtil;
+import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NodeType;
 import org.apache.hadoop.hdfs.server.common.Storage;
@@ -66,6 +67,7 @@ public class FileJournalManager implements JournalManager {
   private final StorageErrorReporter errorReporter;
   private int outputBufferCapacity = 512*1024;
 
+
   private static final Pattern EDITS_REGEX = Pattern.compile(
     NameNodeFile.EDITS.getName() + "_(\\d+)-(\\d+)");
   private static final Pattern EDITS_INPROGRESS_REGEX = Pattern.compile(
@@ -88,6 +90,12 @@ public class FileJournalManager implements JournalManager {
     this.conf = conf;
     this.sd = sd;
     this.errorReporter = errorReporter;
+
+
+    // TODO liuwenbo
+    this.outputBufferCapacity = conf.getInt(
+            DFSConfigKeys.DFS_NAMENODE_OUTPUT_BUFFER_CAPACITY_KEY,
+            DFSConfigKeys.DFS_NAMENODE_OUTPUT_BUFFER_CAPACITY_DEFAULT);
   }
 
   @Override 

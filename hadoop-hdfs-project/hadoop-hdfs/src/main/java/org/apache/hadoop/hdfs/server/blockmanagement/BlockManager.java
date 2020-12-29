@@ -1325,7 +1325,9 @@ public class BlockManager {
     } finally {
       namesystem.writeUnlock();
     }
-    // ......
+    /**
+     *
+     */
     return computeReplicationWorkForBlocks(blocksToReplicate);
   }
 
@@ -1365,11 +1367,16 @@ public class BlockManager {
             containingNodes = new ArrayList<DatanodeDescriptor>();
             List<DatanodeStorageInfo> liveReplicaNodes = new ArrayList<DatanodeStorageInfo>();
             NumberReplicas numReplicas = new NumberReplicas();
-            // 选择一个block的source datanode
-            // 作为一个source  datanode来复制block副本给别的还完好的datanode
+
+            /**
+             *  选择一个block的source datanode
+             *  作为一个source  datanode来复制block副本给别的还完好的datanode
+             */
             srcNode = chooseSourceDatanode(
                 block, containingNodes, liveReplicaNodes, numReplicas,
                 priority);
+
+
             if(srcNode == null) { // block can not be replicated from any node
               LOG.debug("Block " + block + " cannot be repl from any node");
               continue;
@@ -1650,49 +1657,79 @@ public class BlockManager {
        int priority) {
     containingNodes.clear();
     nodesContainingLiveReplicas.clear();
+
+    // 准备选择的datanode
     DatanodeDescriptor srcNode = null;
+
     int live = 0;
     int decommissioned = 0;
     int corrupt = 0;
     int excess = 0;
     
     Collection<DatanodeDescriptor> nodesCorrupt = corruptReplicas.getNodes(block);
+
+     //TODO edit by liuwenbo
+     DatanodeDescriptor decommissonedSrcNode = null;
+
+     /**
+      * TODO
+      * 刚好这个block在复制队列中，它对应的datanode状态都是 Decommission 状态
+      * 这种极端的情况下，这个block的复制任务无法选择出一个source datanode，导致block永久丢失
+      */
     for(DatanodeStorageInfo storage : blocksMap.getStorages(block)) {
+
       final DatanodeDescriptor node = storage.getDatanodeDescriptor();
       LightWeightLinkedSet<Block> excessBlocks =
         excessReplicateMap.get(node.getDatanodeUuid());
       int countableReplica = storage.getState() == State.NORMAL ? 1 : 0; 
+
       if ((nodesCorrupt != null) && (nodesCorrupt.contains(node)))
+        // 副本破损
         corrupt += countableReplica;
       else if (node.isDecommissionInProgress() || node.isDecommissioned())
+        // 下线中或者已下线的
         decommissioned += countableReplica;
       else if (excessBlocks != null && excessBlocks.contains(block)) {
+        //副本超出期望
         excess += countableReplica;
       } else {
         nodesContainingLiveReplicas.add(storage);
         live += countableReplica;
       }
       containingNodes.add(node);
+
       // Check if this replica is corrupt
       // If so, do not select the node as src node
+      // 跳过破损的副本所在的datanode
       if ((nodesCorrupt != null) && nodesCorrupt.contains(node))
         continue;
+
       if(priority != UnderReplicatedBlocks.QUEUE_HIGHEST_PRIORITY 
           && !node.isDecommissionInProgress() 
-          && node.getNumberOfBlocksToBeReplicated() >= maxReplicationStreams)
-      {
+          && node.getNumberOfBlocksToBeReplicated() >= maxReplicationStreams) {
         continue; // already reached replication limit
       }
-      if (node.getNumberOfBlocksToBeReplicated() >= replicationStreamsHardLimit)
-      {
+
+      if (node.getNumberOfBlocksToBeReplicated() >= replicationStreamsHardLimit) {
         continue;
       }
+
       // the block must not be scheduled for removal on srcNode
       if(excessBlocks != null && excessBlocks.contains(block))
         continue;
+
+      // TODO edit by liuwenbo
       // never use already decommissioned nodes
-      if(node.isDecommissioned())
+//      if(node.isDecommissioned()) // 如果节点是DECOMMISSIONED状态，就不要选择作为复制的source node
+//        continue;
+      if(node.isDecommissioned()) {
+        if(decommissonedSrcNode == null || DFSUtil.getRandom().nextBoolean()) {
+          // 选择一个Decommissonedz状态的DataNode
+          decommissonedSrcNode = node;
+        }
         continue;
+      }
+
 
       // We got this far, current node is a reasonable choice
       if (srcNode == null) {
@@ -1702,12 +1739,26 @@ public class BlockManager {
       // switch to a different node randomly
       // this to prevent from deterministically selecting the same node even
       // if the node failed to replicate the block on previous iterations
-      if(DFSUtil.getRandom().nextBoolean())
+      if(DFSUtil.getRandom().nextBoolean()) // 达到随机选择一个source node的目的
         srcNode = node;
     }
+
     if(numReplicas != null)
       numReplicas.initialize(live, decommissioned, corrupt, excess, 0);
-    return srcNode;
+
+     //TODO  edit by liuwenbo
+     if(live == 0
+             && srcNode == null
+             && decommissonedSrcNode != null) {
+       /**
+        * 此时，如果说在选择source datanode的时候，无法选择到一台正常合适的datanode，
+        * 我们就从那些decommissioned状态的机器里随机挑选一台，作为source datanode，他还在正常的运行和工作中
+        */
+       return decommissonedSrcNode;
+     }
+
+
+     return srcNode;
   }
 
   /**
@@ -3307,6 +3358,8 @@ public class BlockManager {
   /**
    * Return true if there are any blocks on this node that have not
    * yet reached their replication factor. Otherwise returns false.
+   *
+   * 如果当前数据节点block块的副本系数还没有满足期望的副本数值值, 则表明还要添加复制请求
    */
   boolean isReplicationInProgress(DatanodeDescriptor srcNode) {
     boolean status = false;
@@ -3314,7 +3367,11 @@ public class BlockManager {
     int underReplicatedBlocks = 0;
     int decommissionOnlyReplicas = 0;
     int underReplicatedInOpenFiles = 0;
+
+    // 拿到这个Datanode的block迭代器
     final Iterator<? extends Block> it = srcNode.getBlockIterator();
+
+    //遍历此节点上的所有数据块
     while(it.hasNext()) {
       final Block block = it.next();
       BlockCollection bc = blocksMap.getBlockCollection(block);
@@ -3351,6 +3408,10 @@ public class BlockManager {
               decommissionOnlyReplicas++;
             }
           }
+
+          /**
+           * block 放到 neededReplications 队列中去
+           */
           if (!neededReplications.contains(block) &&
             pendingReplications.getNumReplicas(block) == 0 &&
             namesystem.isPopulatingReplQueues()) {
@@ -3359,12 +3420,14 @@ public class BlockManager {
             // after the startDecommission method has been executed. These
             // blocks were in flight when the decommissioning was started.
             // Process these blocks only when active NN is out of safe mode.
-            //
+            // 添加新的副本复制请求
             neededReplications.add(block,
                                    curReplicas,
                                    num.decommissionedReplicas(),
                                    curExpectedReplicas);
           }
+
+
         }
       }
     }
@@ -3654,7 +3717,10 @@ public class BlockManager {
         try {
           // Process replication work only when active NN is out of safe mode.
           if (namesystem.isPopulatingReplQueues()) {
-            //
+
+            /**
+             *
+             */
             computeDatanodeWork();
 
             processPendingReplications();
@@ -3702,7 +3768,10 @@ public class BlockManager {
     final int nodesToProcess = (int) Math.ceil(numlive
         * this.blocksInvalidateWorkPct);
 
-    // 核心方法，给每个要复制的block都创建一个复制任务
+    //
+    /**
+     * 核心方法，给每个要复制的block都创建一个复制任务
+     */
     int workFound = this.computeReplicationWork(blocksToProcess);
 
     // Update counters

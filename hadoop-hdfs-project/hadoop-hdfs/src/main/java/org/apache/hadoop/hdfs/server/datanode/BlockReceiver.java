@@ -633,7 +633,7 @@ class BlockReceiver implements Closeable {
         LOG.debug("Receiving an empty packet or the end of the block " + block);
       }
       // sync block if requested
-      // 当前block读完了，就可以刷磁盘了
+      // 当接收到最后一个block之后，就可以flush输出流到os cache（并不是直接落磁盘）
       if (syncBlock) {
         flushOrSync(true);
       }
@@ -1008,6 +1008,9 @@ class BlockReceiver implements Closeable {
         } else {
           // for isDatnode or TRANSFER_FINALIZED
           // Finalize the block.
+          /**
+           *  block移动到Finalize目录下
+           */
           datanode.data.finalizeBlock(block);
         }
         datanode.metrics.incrBlocksWritten();

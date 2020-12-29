@@ -296,6 +296,9 @@ public class FsVolumeImpl implements FsVolumeSpi {
                          File f, long bytesReservedForRbw)
       throws IOException {
     releaseReservedSpace(bytesReservedForRbw);
+    /**
+     *
+     */
     return getBlockPoolSlice(bpid).addBlock(b, f);
   }
 

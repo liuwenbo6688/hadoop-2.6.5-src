@@ -47,7 +47,7 @@ public class EditsDoubleBuffer {
 
   /**
    *  里面放了两个缓冲区
-   *
+   *  默认大小是512KB
    */
   private TxnBuffer bufCurrent; // current buffer for writing
   private TxnBuffer bufReady; // buffer ready for flushing
@@ -56,7 +56,11 @@ public class EditsDoubleBuffer {
 
 
   public EditsDoubleBuffer(int defaultBufferSize) {
+    /**
+     *  缓冲区大小 默认是512KB
+     */
     initBufferSize = defaultBufferSize;
+
     bufCurrent = new TxnBuffer(initBufferSize);
     bufReady = new TxnBuffer(initBufferSize);
 
@@ -105,6 +109,9 @@ public class EditsDoubleBuffer {
   }
   
   public boolean shouldForceSync() {
+    /**
+     *
+     */
     return bufCurrent.size() >= initBufferSize;
   }
 

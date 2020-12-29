@@ -5915,6 +5915,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   void refreshNodes() throws IOException {
     checkOperation(OperationCategory.UNCHECKED);
     checkSuperuserPrivilege();
+      /**
+       *
+       */
     getBlockManager().getDatanodeManager().refreshNodes(new HdfsConfiguration());
   }
 

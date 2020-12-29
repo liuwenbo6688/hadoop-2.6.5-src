@@ -30,6 +30,7 @@ import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -1322,6 +1323,9 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       // been opened for append but never modified
       return;
     }
+    /**
+     *
+     */
     finalizeReplica(b.getBlockPoolId(), replicaInfo);
   }
   
@@ -1341,6 +1345,11 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
             " for block " + replicaInfo);
       }
 
+      //TODO
+
+      /**
+       *
+       */
       File dest = v.addFinalizedBlock(
           bpid, replicaInfo, f, replicaInfo.getBytesReserved());
       newReplicaInfo = new FinalizedReplica(replicaInfo, v, dest.getParentFile());
@@ -1354,6 +1363,30 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
 
     return newReplicaInfo;
   }
+
+
+  private void fsync(File fileToSync) {
+      FileChannel channel = null;
+
+      try {
+        boolean isDir = fileToSync.isDirectory();
+
+        channel = FileChannel.open(fileToSync.toPath(),
+                isDir ? StandardOpenOption.READ : StandardOpenOption.WRITE);
+
+        channel.force(true);
+      } catch (Exception e) {
+        e.printStackTrace();
+      } finally {
+        try {
+          channel.close();
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      }
+  }
+
+
 
   /**
    * Remove the temporary block file (if any)

@@ -845,10 +845,16 @@ public class DatanodeManager {
     // Check to see if all blocks in this decommissioned
     // node has reached their target replication factor.
     if (node.isDecommissionInProgress() && node.checkBlockReportReceived()) {
+
+      /**
+       *
+       */
       if (!blockManager.isReplicationInProgress(node)) {
+        // 标记为 DECOMMISSIONED
         node.setDecommissioned();
         LOG.info("Decommission complete for " + node);
       }
+
     }
     return node.isDecommissioned();
   }
@@ -862,12 +868,16 @@ public class DatanodeManager {
         LOG.info("Start Decommissioning " + node + " " + storage
             + " with " + storage.numBlocks() + " blocks");
       }
+
       // 开始下线
       heartbeatManager.startDecommission(node);
 
       node.decommissioningStatus.setStartTime(now());
       
       // all the blocks that reside on this node have to be replicated.
+      /**
+       *
+       */
       checkDecommissionState(node);
     }
   }
@@ -1079,8 +1089,11 @@ public class DatanodeManager {
     refreshHostsReader(conf);
     namesystem.writeLock();
     try {
-      //......
+      /**
+       *
+       */
       refreshDatanodes();
+
       countSoftwareVersions();
     } finally {
       namesystem.writeUnlock();
@@ -1112,8 +1125,12 @@ public class DatanodeManager {
       } else {
         // 如果配置了exclude掉某台datanode机器
         if (hostFileManager.isExcluded(node)) {
-          //......
+
+          /**
+           *
+           */
           startDecommission(node); // case 3.
+
         } else {
           stopDecommission(node); // case 4.
         }

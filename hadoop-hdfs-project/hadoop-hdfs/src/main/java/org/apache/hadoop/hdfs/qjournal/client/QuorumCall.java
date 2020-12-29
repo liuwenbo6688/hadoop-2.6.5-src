@@ -19,6 +19,7 @@ package org.apache.hadoop.hdfs.qjournal.client;
 
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.apache.hadoop.ipc.RemoteException;
@@ -103,20 +104,46 @@ class QuorumCall<KEY, RESULT> {
    * achieving the desired conditions
    */
   public synchronized void waitFor(
-      int minResponses, int minSuccesses, int maxExceptions,
-      int millis, String operationName)
+      int minResponses,  // 3
+      int minSuccesses,  // (3/2) + 1= 2
+      int maxExceptions, // (3/2) + 1= 2
+      int millis, // 超时时间，默认20s
+      String operationName)
       throws InterruptedException, TimeoutException {
-    long st = Time.monotonicNow();
-    long nextLogTime = st + (long)(millis * WAIT_PROGRESS_INFO_THRESHOLD);
-    long et = st + millis;
+
+    long st = Time.monotonicNow(); // 当前时间
+    long nextLogTime = st + (long)(millis * WAIT_PROGRESS_INFO_THRESHOLD);  // 下一次打印日志的时间， 超时时间（20s） * 0.3 = 6s
+    long et = st + millis; // 超时时间
+
+    // 初始化计时器
+    StopWatch stopWatch = new StopWatch();
+
     while (true) {
+
+      stopWatch.start(); // 开启计时器
+
       checkAssertionErrors();
+
+      /**
+       * 满足返回的条件
+       */
       if (minResponses > 0 && countResponses() >= minResponses) return;
       if (minSuccesses > 0 && countSuccesses() >= minSuccesses) return;
       if (maxExceptions >= 0 && countExceptions() > maxExceptions) return;
+
+      /**
+       * *************************************************
+       * 如果在这里，jvm fullGC卡顿 30s，导致直接超时
+       * *************************************************
+       */
+      // 第一个可能导致
+
       long now = Time.monotonicNow();
       
       if (now > nextLogTime) {
+        /**
+         * 如果一小段时间还没有达到返回条件，就输出一些日志信息
+         */
         long waited = now - st;
         String msg = String.format(
             "Waited %s ms (timeout=%s ms) for a response for %s",
@@ -135,17 +162,93 @@ class QuorumCall<KEY, RESULT> {
         } else {
           QuorumJournalManager.LOG.info(msg);
         }
-        nextLogTime = now + WAIT_PROGRESS_INTERVAL_MILLIS;
+        nextLogTime = now + WAIT_PROGRESS_INTERVAL_MILLIS; // 后面每 1s 打印一次日志
       }
+
+      /**
+       * 超时，向上抛出异常
+       */
       long rem = et - now;
       if (rem <= 0) {
-        throw new TimeoutException();
+
+        long elapsed = stopWatch.elapsed();
+        if (elapsed > 5000L) {
+          // 如果流逝时间大于jvm FullGC阈值(发生了full gc), 延长一下最终时间
+          et = et + elapsed;
+        } else {
+          throw new TimeoutException();
+        }
       }
+
+      stopWatch.restart(); // 重新计时
+
+      /**
+       * 休眠等待一段时间
+       */
       rem = Math.min(rem, nextLogTime - now);
       rem = Math.max(rem, 1);
       wait(rem);
+
+      long elapsed =  stopWatch.elapsed();
+      if(elapsed - rem > 5000L) {
+        // 可能发生fullgc，延长一下截止时间
+        et += (elapsed - rem);
+      }
+
     }
+
   }
+
+  /**
+   * 时间流逝的计时器
+   */
+  class StopWatch {
+
+    boolean isStarted;
+    long startNanos;
+    long elapsedNanos;
+
+    public StopWatch() {
+    }
+
+    public StopWatch reset() {
+      this.isStarted = false;
+      this.elapsedNanos = 0;
+      return this;
+    }
+
+
+    public StopWatch start() {
+      this.isStarted = true;
+      this.startNanos = System.nanoTime();
+      return this;
+    }
+
+    public StopWatch restart() {
+      this.reset()
+          .start();
+      return this;
+    }
+
+    public StopWatch stop() {
+      this.isStarted = false;
+      this.elapsedNanos += System.nanoTime() - this.startNanos;
+      return this;
+    }
+
+    public long elapsed() {
+      long resultElapsedNanos = 0L;
+
+      if (isStarted) {
+        resultElapsedNanos = System.nanoTime() - this.startNanos + elapsedNanos;
+      } else {
+        resultElapsedNanos = elapsedNanos;
+      }
+      return TimeUnit.MILLISECONDS.convert(resultElapsedNanos, TimeUnit.NANOSECONDS);
+    }
+
+  }
+
 
   /**
    * Check if any of the responses came back with an AssertionError.
