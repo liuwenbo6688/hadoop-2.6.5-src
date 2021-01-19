@@ -152,6 +152,7 @@ import com.google.common.util.concurrent.SettableFuture;
 /**
  * The client interface to the Resource Manager. This module handles all the rpc
  * interfaces to the resource manager from the client.
+ * Client到RM的接口, 处理所有rpc从client到rm的所有rpc接口
  */
 public class ClientRMService extends AbstractService implements
     ApplicationClientProtocol {
@@ -520,6 +521,12 @@ public class ClientRMService extends AbstractService implements
     return response;
   }
 
+  /**
+   * 提交 Application
+   * @param request request to submit a new application
+   * @return
+   * @throws YarnException
+   */
   @Override
   public SubmitApplicationResponse submitApplication(
       SubmitApplicationRequest request) throws YarnException {
@@ -551,14 +558,14 @@ public class ClientRMService extends AbstractService implements
       return SubmitApplicationResponse.newInstance();
     }
 
-    if (submissionContext.getQueue() == null) {
+    if (submissionContext.getQueue() == null) { // 没有指定队列， 默认放到 default 队列中
       submissionContext.setQueue(YarnConfiguration.DEFAULT_QUEUE_NAME);
     }
-    if (submissionContext.getApplicationName() == null) {
+    if (submissionContext.getApplicationName() == null) {// 默认的App Name
       submissionContext.setApplicationName(
           YarnConfiguration.DEFAULT_APPLICATION_NAME);
     }
-    if (submissionContext.getApplicationType() == null) {
+    if (submissionContext.getApplicationType() == null) {// 默认类型yarn
       submissionContext
         .setApplicationType(YarnConfiguration.DEFAULT_APPLICATION_TYPE);
     } else {
@@ -571,6 +578,12 @@ public class ClientRMService extends AbstractService implements
 
     try {
       // call RMAppManager to submit application directly
+      /**
+       * **************************************
+       * 找 RMAppManager 提交application
+       * RMAppManager是RM端负责管理application的组件
+       * **************************************
+       */
       rmAppManager.submitApplication(submissionContext,
           System.currentTimeMillis(), user);
 

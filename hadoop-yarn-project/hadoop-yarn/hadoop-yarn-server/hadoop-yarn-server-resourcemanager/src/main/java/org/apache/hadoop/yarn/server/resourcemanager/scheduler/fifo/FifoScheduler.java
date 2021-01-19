@@ -354,9 +354,14 @@ public class FifoScheduler extends
   @VisibleForTesting
   public synchronized void addApplication(ApplicationId applicationId,
       String queue, String user, boolean isAppRecovering) {
+
+    /**
+     *  创建 SchedulerApplication 并且缓存在map结构中
+     */
     SchedulerApplication<FiCaSchedulerApp> application =
         new SchedulerApplication<FiCaSchedulerApp>(DEFAULT_QUEUE, user);
     applications.put(applicationId, application);
+
     metrics.submitApp(user);
     LOG.info("Accepted application " + applicationId + " from user: " + user
         + ", currently num of applications: " + applications.size());
@@ -365,6 +370,9 @@ public class FifoScheduler extends
         LOG.debug(applicationId + " is recovering. Skip notifying APP_ACCEPTED");
       }
     } else {
+      /**
+       * 转发事件 RMAppEventType.APP_ACCEPTED
+       */
       rmContext.getDispatcher().getEventHandler()
         .handle(new RMAppEvent(applicationId, RMAppEventType.APP_ACCEPTED));
     }
@@ -398,6 +406,7 @@ public class FifoScheduler extends
             + " is recovering. Skipping notifying ATTEMPT_ADDED");
       }
     } else {
+      // 向 RMAppAttemptImpl 发送RMAppAttemptEventType.ATTEMPT_ADDED事件
       rmContext.getDispatcher().getEventHandler().handle(
         new RMAppAttemptEvent(appAttemptId,
             RMAppAttemptEventType.ATTEMPT_ADDED));
@@ -783,12 +792,20 @@ public class FifoScheduler extends
       nodeUpdate(nodeUpdatedEvent.getRMNode());
     }
     break;
-    case APP_ADDED:
+    case APP_ADDED:// 添加app
     {
+      /**
+       * 强转为 AppAddedSchedulerEvent
+       */
       AppAddedSchedulerEvent appAddedEvent = (AppAddedSchedulerEvent) event;
-      addApplication(appAddedEvent.getApplicationId(),
-        appAddedEvent.getQueue(), appAddedEvent.getUser(),
-        appAddedEvent.getIsAppRecovering());
+
+      // 添加app到调度器
+      addApplication(appAddedEvent.getApplicationId(),//applicationId
+              appAddedEvent.getQueue(),// 队列
+              appAddedEvent.getUser(), // 提交任务的用户
+              appAddedEvent.getIsAppRecovering() // 是否恢复
+      );
+
     }
     break;
     case APP_REMOVED:
@@ -800,11 +817,13 @@ public class FifoScheduler extends
     break;
     case APP_ATTEMPT_ADDED:
     {
+      // app attempt 添加完成
       AppAttemptAddedSchedulerEvent appAttemptAddedEvent =
           (AppAttemptAddedSchedulerEvent) event;
+
       addApplicationAttempt(appAttemptAddedEvent.getApplicationAttemptId(),
-        appAttemptAddedEvent.getTransferStateFromPreviousAttempt(),
-        appAttemptAddedEvent.getIsAttemptRecovering());
+              appAttemptAddedEvent.getTransferStateFromPreviousAttempt(),
+              appAttemptAddedEvent.getIsAttemptRecovering());
     }
     break;
     case APP_ATTEMPT_REMOVED:

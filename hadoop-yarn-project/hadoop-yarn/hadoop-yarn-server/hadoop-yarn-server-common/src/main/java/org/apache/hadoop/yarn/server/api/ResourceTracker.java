@@ -28,12 +28,18 @@ import org.apache.hadoop.yarn.server.api.protocolrecords.RegisterNodeManagerRequ
 import org.apache.hadoop.yarn.server.api.protocolrecords.RegisterNodeManagerResponse;
 
 public interface ResourceTracker {
-  
+
+  /**
+   * 注册 NodeManager
+   */
   @Idempotent
   public RegisterNodeManagerResponse registerNodeManager(
       RegisterNodeManagerRequest request) throws YarnException,
       IOException;
 
+  /**
+   * 接收NodeManager发送心跳
+   */
   @AtMostOnce
   public NodeHeartbeatResponse nodeHeartbeat(NodeHeartbeatRequest request)
       throws YarnException, IOException;

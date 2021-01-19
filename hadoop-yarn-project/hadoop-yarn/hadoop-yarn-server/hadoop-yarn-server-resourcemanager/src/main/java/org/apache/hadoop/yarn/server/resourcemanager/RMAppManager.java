@@ -60,7 +60,8 @@ import org.apache.hadoop.yarn.server.utils.BuilderUtils;
 import com.google.common.annotations.VisibleForTesting;
 
 /**
- * This class manages the list of applications for the resource manager. 
+ * This class manages the list of applications for the resource manager.
+ * RM 端负责管理application的组件
  */
 public class RMAppManager implements EventHandler<RMAppManagerEvent>, 
                                         Recoverable {
@@ -270,11 +271,18 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
       String user) throws YarnException {
     ApplicationId applicationId = submissionContext.getApplicationId();
 
+    /**
+     * ********************
+     * 创建 Application 对象， 初始状态为 RMAppState.NEW
+     * ********************
+     */
     RMAppImpl application =
         createAndPopulateNewRMApp(submissionContext, submitTime, user, false);
+
     ApplicationId appId = submissionContext.getApplicationId();
 
     if (UserGroupInformation.isSecurityEnabled()) {
+      // 启用了KERBEROS之类的安全认证，才会走这里
       try {
         this.rmContext.getDelegationTokenRenewer().addApplicationAsync(appId,
             parseCredentials(submissionContext),
@@ -294,8 +302,11 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
       // Dispatcher is not yet started at this time, so these START events
       // enqueued should be guaranteed to be first processed when dispatcher
       // gets started.
+      // 正常就是走这里, 事件处理机制（状态机）
+      // RMAppImpl的状态机
       this.rmContext.getDispatcher().getEventHandler()
-        .handle(new RMAppEvent(applicationId, RMAppEventType.START));
+        .handle(new RMAppEvent(applicationId, RMAppEventType.START)
+        );
     }
   }
 
@@ -320,7 +331,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     ResourceRequest amReq =
         validateAndCreateResourceRequest(submissionContext, isRecovery);
 
-    // Create RMApp
+    // Create RMApp， 初始状态为 RMAppState.NEW
     RMAppImpl application =
         new RMAppImpl(applicationId, rmContext, this.conf,
             submissionContext.getApplicationName(), user,

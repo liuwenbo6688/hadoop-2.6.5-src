@@ -36,7 +36,9 @@ public class AppAttemptAddedSchedulerEvent extends SchedulerEvent {
       ApplicationAttemptId applicationAttemptId,
       boolean transferStateFromPreviousAttempt,
       boolean isAttemptRecovering) {
+    //
     super(SchedulerEventType.APP_ATTEMPT_ADDED);
+
     this.applicationAttemptId = applicationAttemptId;
     this.transferStateFromPreviousAttempt = transferStateFromPreviousAttempt;
     this.isAttemptRecovering = isAttemptRecovering;

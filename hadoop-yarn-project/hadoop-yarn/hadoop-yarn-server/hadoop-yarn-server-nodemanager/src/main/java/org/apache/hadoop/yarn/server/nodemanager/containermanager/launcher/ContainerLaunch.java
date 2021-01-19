@@ -284,6 +284,12 @@ public class ContainerLaunch implements Callable<Integer> {
         IOUtils.cleanup(LOG, containerScriptOutStream, tokensOutStream);
       }
 
+
+      /**
+       * 由于 call() 方法调用是阻塞的
+       * 这里先发送 ContainerEventType.CONTAINER_LAUNCHED 事件，将 Container 状态从LOCALIZED 转换为 RUNNING
+       * LaunchTransition
+       */
       // LaunchContainer is a blocking call. We are here almost means the
       // container is launched, so send out the event.
       dispatcher.getEventHandler().handle(new ContainerEvent(
@@ -298,10 +304,25 @@ public class ContainerLaunch implements Callable<Integer> {
         ret = ExitCode.TERMINATED.getExitCode();
       }
       else {
+
         exec.activateContainer(containerID, pidFilePath);
+
+        /**
+         * 重点来了
+         * 调用 ContainerExecutor 对象启动 Container
+         * Container 的运行环境已经准备好，接下来就是真正在 NM 上真正启动 Container 的过程
+         * 具体启动是调用 ContainerExecutor#launchContainer() 方法。
+         *
+         *
+         * 执行启动 Container的类，由参数 yarn.nodemanager.container-executor.class 决定
+         *
+         *  这是一个阻塞的方法，直到 container 退出才返回
+         */
         ret = exec.launchContainer(container, nmPrivateContainerScriptPath,
                 nmPrivateTokensPath, user, appIdStr, containerWorkDir,
                 localDirs, logDirs);
+
+        // 运行到这里说明container运行结束，上面的launchContainer方法是阻塞的
       }
     } catch (Throwable e) {
       LOG.warn("Failed to launch container.", e);
@@ -343,10 +364,14 @@ public class ContainerLaunch implements Callable<Integer> {
       return ret;
     }
 
+
+    // container 执行返回结果, 进行清理
+    // ExitedWithSuccessTransition
     LOG.info("Container " + containerIdStr + " succeeded ");
     dispatcher.getEventHandler().handle(
         new ContainerEvent(containerID,
             ContainerEventType.CONTAINER_EXITED_WITH_SUCCESS));
+
     return 0;
   }
 

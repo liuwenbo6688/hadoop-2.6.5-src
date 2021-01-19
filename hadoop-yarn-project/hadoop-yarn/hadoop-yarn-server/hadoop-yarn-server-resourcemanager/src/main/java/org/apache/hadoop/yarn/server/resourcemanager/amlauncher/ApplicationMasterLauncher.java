@@ -62,7 +62,11 @@ public class ApplicationMasterLauncher extends AbstractService implements
         new AMLauncher(context, application, event, getConfig());
     return launcher;
   }
-  
+
+  /**
+   *
+   * @param application
+   */
   private void launch(RMAppAttempt application) {
     Runnable launcher = createRunnableLauncher(application, 
         AMLauncherEventType.LAUNCH);

@@ -19,14 +19,14 @@
 package org.apache.hadoop.yarn.server.resourcemanager.rmapp;
 
 public enum RMAppState {
-  NEW,
+  NEW, // RMApp的初始状态
   NEW_SAVING,
   SUBMITTED,
-  ACCEPTED,
-  RUNNING,
+  ACCEPTED, // 表示该App已经提交给调度器
+  RUNNING, //  AM已经启动并注册到RM上
   FINAL_SAVING,
   FINISHING,
-  FINISHED,
+  FINISHED, // RMAppImpl的结束状态
   FAILED,
   KILLING,
   KILLED

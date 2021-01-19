@@ -204,6 +204,9 @@ public class NodeManager extends CompositeService
     
     this.aclsManager = new ApplicationACLsManager(conf);
 
+    /**
+     * 执行启动 Container的类，由参数  yarn.nodemanager.container-executor.class 决定
+     */
     ContainerExecutor exec = ReflectionUtils.newInstance(
         conf.getClass(YarnConfiguration.NM_CONTAINER_EXECUTOR,
           DefaultContainerExecutor.class, ContainerExecutor.class), conf);

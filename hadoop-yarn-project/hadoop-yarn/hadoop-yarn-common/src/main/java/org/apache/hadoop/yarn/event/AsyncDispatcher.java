@@ -41,6 +41,8 @@ import com.google.common.annotations.VisibleForTesting;
  * Dispatches {@link Event}s in a separate thread. Currently only single thread
  * does that. Potentially there could be multiple channels for each event type
  * class and a thread pool can be used to dispatch the events.
+ *
+ * AsyncDispatcher是Yarn中事件异步分发器，它是ResourceManager中的一个基于阻塞队列的分发或者调度事件的组件
  */
 @SuppressWarnings("rawtypes")
 @Public
@@ -49,7 +51,11 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
 
   private static final Log LOG = LogFactory.getLog(AsyncDispatcher.class);
 
+  /**
+   * 队列
+   */
   private final BlockingQueue<Event> eventQueue;
+
   private volatile int lastEventQueueSizeLogged = 0;
   private volatile boolean stopped = false;
 
@@ -68,7 +74,12 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
   private EventHandler handlerInstance = null;
 
   private Thread eventHandlingThread;
+
+  /**
+   *  事件类型枚举类Enum到事件处理器EventHandler实例的映射集合
+   */
   protected final Map<Class<? extends Enum>, EventHandler> eventDispatchers;
+
   private boolean exitOnDispatchException;
 
   public AsyncDispatcher() {
@@ -198,6 +209,11 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
     }
   }
 
+  /**
+   * 将指定事件类型枚举类eventType与事件处理器EventHandler实例的映射关系，注册到AsyncDispatcher的eventDispatchers集合
+   * @param eventType 事件类型枚举类
+   * @param handler   事件处理器
+   */
   @SuppressWarnings("unchecked")
   @Override
   public void register(Class<? extends Enum> eventType,
@@ -206,15 +222,20 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
     EventHandler<Event> registeredHandler = (EventHandler<Event>)
     eventDispatchers.get(eventType);
     LOG.info("Registering " + eventType + " for " + handler.getClass());
+
     if (registeredHandler == null) {
+      // 没有注册过
       eventDispatchers.put(eventType, handler);
     } else if (!(registeredHandler instanceof MultiListenerHandler)){
+
+      // 已经注册过，且不是MultiListenerHandler
       /* for multiple listeners of an event add the multiple listener handler */
       MultiListenerHandler multiHandler = new MultiListenerHandler();
       multiHandler.addHandler(registeredHandler);
       multiHandler.addHandler(handler);
       eventDispatchers.put(eventType, multiHandler);
     } else {
+      // 已经注册过，且是MultiListenerHandler
       /* already a multilistener, just add to it */
       MultiListenerHandler multiHandler
       = (MultiListenerHandler) registeredHandler;
@@ -250,6 +271,9 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
             + remCapacity);
       }
       try {
+        /**
+         * 事件放入阻塞队列
+         */
         eventQueue.put(event);
       } catch (InterruptedException e) {
         if (!stopped) {

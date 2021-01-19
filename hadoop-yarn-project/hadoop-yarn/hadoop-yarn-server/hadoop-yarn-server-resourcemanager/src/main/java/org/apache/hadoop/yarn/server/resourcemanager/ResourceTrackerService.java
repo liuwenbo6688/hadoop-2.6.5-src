@@ -73,6 +73,9 @@ import org.apache.hadoop.yarn.util.YarnVersionInfo;
 
 import com.google.common.annotations.VisibleForTesting;
 
+/**
+ * NodeManager向RM注册和发送心跳
+ */
 public class ResourceTrackerService extends AbstractService implements
     ResourceTracker {
 
@@ -349,6 +352,9 @@ public class ResourceTrackerService extends AbstractService implements
     return response;
   }
 
+  /**
+   * 接收NodeManager发送心跳
+   */
   @SuppressWarnings("unchecked")
   @Override
   public NodeHeartbeatResponse nodeHeartbeat(NodeHeartbeatRequest request)
@@ -363,11 +369,12 @@ public class ResourceTrackerService extends AbstractService implements
      * 4. Send healthStatus to RMNode
      */
 
-    NodeId nodeId = remoteNodeStatus.getNodeId();
+    NodeId nodeId = remoteNodeStatus.getNodeId();// 节点的ID
 
     // 1. Check if it's a registered node
     RMNode rmNode = this.rmContext.getRMNodes().get(nodeId);
     if (rmNode == null) {
+      // node不存在
       /* node does not exist */
       String message = "Node not found resyncing " + remoteNodeStatus.getNodeId();
       LOG.info(message);
@@ -428,9 +435,12 @@ public class ResourceTrackerService extends AbstractService implements
 
     // 4. Send status to RMNode, saving the latest response.
     this.rmContext.getDispatcher().getEventHandler().handle(
-        new RMNodeStatusEvent(nodeId, remoteNodeStatus.getNodeHealthStatus(),
-            remoteNodeStatus.getContainersStatuses(), 
-            remoteNodeStatus.getKeepAliveApplications(), nodeHeartBeatResponse));
+        new RMNodeStatusEvent(nodeId,
+                remoteNodeStatus.getNodeHealthStatus(),
+                remoteNodeStatus.getContainersStatuses(),
+                remoteNodeStatus.getKeepAliveApplications(),
+                nodeHeartBeatResponse)
+    );
 
     return nodeHeartBeatResponse;
   }

@@ -87,6 +87,9 @@ public class ApplicationMasterProtocolPBServiceImpl implements ApplicationMaster
       throws ServiceException {
     RegisterApplicationMasterRequestPBImpl request = new RegisterApplicationMasterRequestPBImpl(proto);
     try {
+      /**
+       * 注册 ApplicationMaster
+       */
       RegisterApplicationMasterResponse response = real.registerApplicationMaster(request);
       return ((RegisterApplicationMasterResponsePBImpl)response).getProto();
     } catch (YarnException e) {

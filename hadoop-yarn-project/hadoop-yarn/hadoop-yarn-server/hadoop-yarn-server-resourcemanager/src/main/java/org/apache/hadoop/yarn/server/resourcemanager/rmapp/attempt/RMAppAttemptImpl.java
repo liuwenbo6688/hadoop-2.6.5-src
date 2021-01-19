@@ -188,8 +188,10 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
                                      RMAppAttemptEvent>(RMAppAttemptState.NEW)
 
        // Transitions from NEW State
+       // 启动 AppAttempt
       .addTransition(RMAppAttemptState.NEW, RMAppAttemptState.SUBMITTED,
           RMAppAttemptEventType.START, new AttemptStartedTransition())
+
       .addTransition(RMAppAttemptState.NEW, RMAppAttemptState.FINAL_SAVING,
           RMAppAttemptEventType.KILL,
           new FinalSavingTransition(new BaseFinalTransition(
@@ -204,11 +206,13 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
           RMAppAttemptEventType.RECOVER, new AttemptRecoveredTransition())
           
       // Transitions from SUBMITTED state
+      // RMAppAttemptImpl 处理 ATTEMPT_ADDED 事件
       .addTransition(RMAppAttemptState.SUBMITTED, 
           EnumSet.of(RMAppAttemptState.LAUNCHED_UNMANAGED_SAVING,
                      RMAppAttemptState.SCHEDULED),
           RMAppAttemptEventType.ATTEMPT_ADDED,
           new ScheduleTransition())
+
       .addTransition(RMAppAttemptState.SUBMITTED, RMAppAttemptState.FINAL_SAVING,
           RMAppAttemptEventType.KILL,
           new FinalSavingTransition(new BaseFinalTransition(
@@ -868,6 +872,9 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
       appAttempt.startTime = System.currentTimeMillis();
 
       // Register with the ApplicationMasterService
+      /**
+       * 注册 ApplicationAttempt
+       */
       appAttempt.masterService
           .registerAppAttempt(appAttempt.applicationAttemptId);
 
@@ -879,6 +886,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
 
       // Add the applicationAttempt to the scheduler and inform the scheduler
       // whether to transfer the state from previous attempt.
+      // 继续转发事件 SchedulerEventType.APP_ATTEMPT_ADDED
       appAttempt.eventHandler.handle(new AppAttemptAddedSchedulerEvent(
         appAttempt.applicationAttemptId, transferStateFromPreviousAttempt));
     }
@@ -913,10 +921,19 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
         appAttempt.amReq.setRelaxLocality(true);
         
         // AM resource has been checked when submission
+        /**
+         * ****************************
+         * 为ApplicationMater分配资源, 返回 Allocation 对象
+         * ***************************
+         */
         Allocation amContainerAllocation =
-            appAttempt.scheduler.allocate(appAttempt.applicationAttemptId,
-                Collections.singletonList(appAttempt.amReq),
-                EMPTY_CONTAINER_RELEASE_LIST, null, null);
+                appAttempt.scheduler.allocate(
+                        appAttempt.applicationAttemptId,
+                        Collections.singletonList(appAttempt.amReq),
+                        EMPTY_CONTAINER_RELEASE_LIST,
+                        null,
+                        null);
+
         if (amContainerAllocation != null
             && amContainerAllocation.getContainers() != null) {
           assert (amContainerAllocation.getContainers().size() == 0);
@@ -971,7 +988,12 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
         .clearNodeSetForAttempt(appAttempt.applicationAttemptId);
       appAttempt.getSubmissionContext().setResource(
         appAttempt.getMasterContainer().getResource());
+
+      /**
+       * 向RMStateStore发送RMStateStoreEventType.STORE_APP_ATTEMPT（放入资源调度器中）
+       */
       appAttempt.storeAttempt();
+
       return RMAppAttemptState.ALLOCATED_SAVING;
     }
   }
@@ -995,8 +1017,10 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
 
   private static final class AttemptStoredTransition extends BaseTransition {
     @Override
-    public void transition(RMAppAttemptImpl appAttempt,
-                                                    RMAppAttemptEvent event) {
+    public void transition(RMAppAttemptImpl appAttempt, RMAppAttemptEvent event) {
+      /**
+       *
+       */
       appAttempt.launchAttempt();
     }
   }
@@ -1822,6 +1846,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
 
   private void launchAttempt(){
     // Send event to launch the AM Container
+    // 将 AMLauncherEventType.LAUNCH 事件放入事件对列中
     eventHandler.handle(new AMLauncherEvent(AMLauncherEventType.LAUNCH, this));
   }
   
@@ -1838,6 +1863,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
               + " AttemptId: " + 
               getAppAttemptId()
               + " MasterContainer: " + masterContainer);
+    //
     rmContext.getStateStore().storeNewApplicationAttempt(this);
   }
 

@@ -97,6 +97,10 @@ import org.apache.hadoop.yarn.webapp.util.WebAppUtils;
 
 import com.google.common.annotations.VisibleForTesting;
 
+/**
+ * 在RM内部维护着所有Application的状态。
+ * 对于每个Application都有一个RMApp对象与之对应。
+ */
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public class RMAppImpl implements RMApp, Recoverable {
 
@@ -136,7 +140,7 @@ public class RMAppImpl implements RMApp, Recoverable {
   private long storedFinishTime = 0;
   // This field isn't protected by readlock now.
   private volatile RMAppAttempt currentAttempt;
-  private String queue;
+  private String queue;// 提交队列
   private EventHandler handler;
   private static final AppFinishedTransition FINISHED_TRANSITION =
       new AppFinishedTransition();
@@ -152,14 +156,14 @@ public class RMAppImpl implements RMApp, Recoverable {
 
   Object transitionTodo;
 
+  /**
+   * 状态机
+   */
   private static final StateMachineFactory<RMAppImpl,
                                            RMAppState,
                                            RMAppEventType,
                                            RMAppEvent> stateMachineFactory
-                               = new StateMachineFactory<RMAppImpl,
-                                           RMAppState,
-                                           RMAppEventType,
-                                           RMAppEvent>(RMAppState.NEW)
+                               = new StateMachineFactory<RMAppImpl, RMAppState, RMAppEventType, RMAppEvent>(RMAppState.NEW/*初始状态就是NEW*/)
 
 
      // Transitions from NEW state
@@ -181,8 +185,12 @@ public class RMAppImpl implements RMApp, Recoverable {
     // Transitions from NEW_SAVING state
     .addTransition(RMAppState.NEW_SAVING, RMAppState.NEW_SAVING,
         RMAppEventType.NODE_UPDATE, new RMAppNodeUpdateTransition())
+      /**
+       * application 提交成功
+       */
     .addTransition(RMAppState.NEW_SAVING, RMAppState.SUBMITTED,
         RMAppEventType.APP_NEW_SAVED, new AddApplicationToSchedulerTransition())
+
     .addTransition(RMAppState.NEW_SAVING, RMAppState.FINAL_SAVING,
         RMAppEventType.KILL,
         new FinalSavingTransition(
@@ -203,8 +211,12 @@ public class RMAppImpl implements RMApp, Recoverable {
         RMAppEventType.APP_REJECTED,
         new FinalSavingTransition(
           new AppRejectedTransition(), RMAppState.FAILED))
+      /**
+       * 提交给调度器
+       */
     .addTransition(RMAppState.SUBMITTED, RMAppState.ACCEPTED,
         RMAppEventType.APP_ACCEPTED, new StartAppAttemptTransition())
+
     .addTransition(RMAppState.SUBMITTED, RMAppState.FINAL_SAVING,
         RMAppEventType.KILL,
         new FinalSavingTransition(
@@ -383,8 +395,13 @@ public class RMAppImpl implements RMApp, Recoverable {
     this.applicationTags = applicationTags;
     this.amReq = amReq;
 
+      /**
+       * yarn.resourcemanager.am.max-attempts
+       * appMaster的最大重试次数 2次
+       */
     int globalMaxAppAttempts = conf.getInt(YarnConfiguration.RM_AM_MAX_ATTEMPTS,
         YarnConfiguration.DEFAULT_RM_AM_MAX_ATTEMPTS);
+
     int individualMaxAppAttempts = submissionContext.getMaxAppAttempts();
     if (individualMaxAppAttempts <= 0 ||
         individualMaxAppAttempts > globalMaxAppAttempts) {
@@ -738,6 +755,9 @@ public class RMAppImpl implements RMApp, Recoverable {
   }
 
   private void createNewAttempt() {
+      /**
+       * 创建一个  Application Attempt， attemptId 就是尝试次数 + 1，能够知道重试次数
+       */
     ApplicationAttemptId appAttemptId =
         ApplicationAttemptId.newInstance(applicationId, attempts.size() + 1);
     RMAppAttempt attempt =
@@ -749,15 +769,19 @@ public class RMAppImpl implements RMApp, Recoverable {
           // limit.
           maxAppAttempts == (getNumFailedAppAttempts() + 1), amReq);
     attempts.put(appAttemptId, attempt);
-    currentAttempt = attempt;
+    currentAttempt = attempt;// 赋值给当前的app Attempt
   }
-  
-  private void
-      createAndStartNewAttempt(boolean transferStateFromPreviousAttempt) {
-    createNewAttempt();
-    handler.handle(new RMAppStartAttemptEvent(currentAttempt.getAppAttemptId(),
-      transferStateFromPreviousAttempt));
-  }
+
+    private void createAndStartNewAttempt(boolean transferStateFromPreviousAttempt) {
+        //创建
+        createNewAttempt();
+
+        /**
+         * 发送 RMAppAttemptEventType.START
+         */
+        handler.handle(new RMAppStartAttemptEvent(currentAttempt.getAppAttemptId(),
+                transferStateFromPreviousAttempt));
+    }
 
   private void processNodeUpdate(RMAppNodeUpdateType type, RMNode node) {
     NodeState nodeState = node.getState();
@@ -907,6 +931,9 @@ public class RMAppImpl implements RMApp, Recoverable {
   private static final class StartAppAttemptTransition extends RMAppTransition {
     @Override
     public void transition(RMAppImpl app, RMAppEvent event) {
+    /**
+     *
+     */
       app.createAndStartNewAttempt(false);
     };
   }
@@ -968,6 +995,7 @@ public class RMAppImpl implements RMApp, Recoverable {
       // needed to restart the AM after RM restart without further client
       // communication
       LOG.info("Storing application with id " + app.applicationId);
+      //
       app.rmContext.getStateStore().storeNewApplication(app);
     }
   }

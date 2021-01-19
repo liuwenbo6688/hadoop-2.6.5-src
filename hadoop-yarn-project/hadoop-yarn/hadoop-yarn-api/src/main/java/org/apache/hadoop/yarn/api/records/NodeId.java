@@ -26,7 +26,7 @@ import org.apache.hadoop.yarn.util.Records;
 
 /**
  * <p><code>NodeId</code> is the unique identifier for a node.</p>
- * 
+ * 标识唯一的 NodeManager
  * <p>It includes the <em>hostname</em> and <em>port</em> to uniquely 
  * identify the node. Thus, it is unique across restarts of any 
  * <code>NodeManager</code>.</p>

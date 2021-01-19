@@ -164,13 +164,15 @@ public class ContainerImpl implements Container {
            <ContainerImpl, ContainerState, ContainerEventType, ContainerEvent>
         stateMachineFactory =
       new StateMachineFactory<ContainerImpl, ContainerState, ContainerEventType, ContainerEvent>(ContainerState.NEW)
-    // From NEW State
+
+     // From NEW State
     .addTransition(ContainerState.NEW,
         EnumSet.of(ContainerState.LOCALIZING,
             ContainerState.LOCALIZED,
             ContainerState.LOCALIZATION_FAILED,
             ContainerState.DONE),
         ContainerEventType.INIT_CONTAINER, new RequestResourcesTransition())
+
     .addTransition(ContainerState.NEW, ContainerState.NEW,
         ContainerEventType.UPDATE_DIAGNOSTICS_MSG,
         UPDATE_DIAGNOSTICS_TRANSITION)
@@ -228,10 +230,12 @@ public class ContainerImpl implements Container {
         ContainerEventType.KILL_CONTAINER, new KillTransition())
 
     // From RUNNING State
+    // Container运行结束
     .addTransition(ContainerState.RUNNING,
         ContainerState.EXITED_WITH_SUCCESS,
         ContainerEventType.CONTAINER_EXITED_WITH_SUCCESS,
         new ExitedWithSuccessTransition(true))
+
     .addTransition(ContainerState.RUNNING,
         ContainerState.EXITED_WITH_FAILURE,
         ContainerEventType.CONTAINER_EXITED_WITH_FAILURE,
@@ -516,10 +520,15 @@ public class ContainerImpl implements Container {
   private void sendLaunchEvent() {
     ContainersLauncherEventType launcherEvent =
         ContainersLauncherEventType.LAUNCH_CONTAINER;
+
     if (recoveredStatus == RecoveredContainerStatus.LAUNCHED) {
       // try to recover a container that was previously launched
       launcherEvent = ContainersLauncherEventType.RECOVER_CONTAINER;
     }
+
+    /**
+     * 向调度器发送 ContainersLauncherEventType.LAUNCH_CONTAINER 事件请求
+     */
     dispatcher.getEventHandler().handle(
         new ContainersLauncherEvent(this, launcherEvent));
   }
@@ -631,6 +640,7 @@ public class ContainerImpl implements Container {
 
       // Send requests for public, private resources
       Map<String,LocalResource> cntrRsrc = ctxt.getLocalResources();
+
       if (!cntrRsrc.isEmpty()) {
         try {
           for (Map.Entry<String,LocalResource> rsrc : cntrRsrc.entrySet()) {
@@ -684,6 +694,12 @@ public class ContainerImpl implements Container {
               new ContainerLocalizationRequestEvent(container, req));
         return ContainerState.LOCALIZING;
       } else {
+
+        /**
+         * ********************************
+         * 重点：发送启动Container的操作
+         * ********************************
+         */
         container.sendLaunchEvent();
         container.metrics.endInitingContainer();
         return ContainerState.LOCALIZED;
@@ -769,11 +785,13 @@ public class ContainerImpl implements Container {
       // TODO: Add containerWorkDir to the deletion service.
 
       if (clCleanupRequired) {
+        // 向 ContainerLauncher 发送 ContainersLauncherEventType.CLEANUP_CONTAINER 清理事件
         container.dispatcher.getEventHandler().handle(
             new ContainersLauncherEvent(container,
                 ContainersLauncherEventType.CLEANUP_CONTAINER));
       }
 
+      // 向 ResourceLocalizationService 发送 LocalizationEventType.CLEANUP_CONTAINER_RESOURCES 清理事件
       container.cleanup();
     }
   }

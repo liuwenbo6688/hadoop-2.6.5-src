@@ -125,6 +125,7 @@ public abstract class ContainerExecutor implements Configurable {
   /**
    * Launch the container on the node. This is a blocking call and returns only
    * when the container exits.
+   * 这是一个阻塞的方法，直到 container 退出才返回
    * @param container the container to be launched
    * @param nmPrivateContainerScriptPath the path for launch script
    * @param nmPrivateTokensPath the path for tokens for the container

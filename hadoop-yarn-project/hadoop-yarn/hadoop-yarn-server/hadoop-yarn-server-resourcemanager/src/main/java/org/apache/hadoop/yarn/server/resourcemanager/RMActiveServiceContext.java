@@ -65,6 +65,9 @@ public class RMActiveServiceContext {
   private final ConcurrentMap<ApplicationId, RMApp> applications =
       new ConcurrentHashMap<ApplicationId, RMApp>();
 
+  /**
+   * 缓存所有的NodeManager信息
+   */
   private final ConcurrentMap<NodeId, RMNode> nodes =
       new ConcurrentHashMap<NodeId, RMNode>();
 

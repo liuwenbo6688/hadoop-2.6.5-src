@@ -30,7 +30,10 @@ package hadoop.yarn;
 
 import "yarn_service_protos.proto";
 
-
+/**
+ * 定义了 am 和 rm 之间的协议
+ * 注册am、结束am、申请资源
+ */
 service ApplicationMasterProtocolService {
   rpc registerApplicationMaster (RegisterApplicationMasterRequestProto) returns (RegisterApplicationMasterResponseProto);
   rpc finishApplicationMaster (FinishApplicationMasterRequestProto) returns (FinishApplicationMasterResponseProto);

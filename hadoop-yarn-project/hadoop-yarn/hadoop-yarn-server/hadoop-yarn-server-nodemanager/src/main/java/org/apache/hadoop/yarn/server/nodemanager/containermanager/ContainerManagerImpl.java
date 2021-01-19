@@ -698,9 +698,13 @@ public class ContainerManagerImpl extends CompositeService implements
     UserGroupInformation remoteUgi = getRemoteUgi();
     NMTokenIdentifier nmTokenIdentifier = selectNMTokenIdentifier(remoteUgi);
     authorizeUser(remoteUgi,nmTokenIdentifier);
+
+    // 暂存启动成功的container
     List<ContainerId> succeededContainers = new ArrayList<ContainerId>();
-    Map<ContainerId, SerializedException> failedContainers =
-        new HashMap<ContainerId, SerializedException>();
+
+    // 暂存启动失败的container
+    Map<ContainerId, SerializedException> failedContainers = new HashMap<ContainerId, SerializedException>();
+
     for (StartContainerRequest request : requests.getStartContainerRequests()) {
       ContainerId containerId = null;
       try {
@@ -709,8 +713,12 @@ public class ContainerManagerImpl extends CompositeService implements
         verifyAndGetContainerTokenIdentifier(request.getContainerToken(),
           containerTokenIdentifier);
         containerId = containerTokenIdentifier.getContainerID();
-        startContainerInternal(nmTokenIdentifier, containerTokenIdentifier,
-          request);
+
+        /**
+         *  启动 Container 的内部逻辑
+         */
+        startContainerInternal(nmTokenIdentifier, containerTokenIdentifier, request);
+
         succeededContainers.add(containerId);
       } catch (YarnException e) {
         failedContainers.put(containerId, SerializedException.newInstance(e));
@@ -838,8 +846,12 @@ public class ContainerManagerImpl extends CompositeService implements
         // Create the application
         Application application =
             new ApplicationImpl(dispatcher, user, applicationID, credentials, context);
-        if (null == context.getApplications().putIfAbsent(applicationID,
-          application)) {
+
+
+        if (null == context.getApplications().putIfAbsent(applicationID, application)) {
+          /**
+           * 应用程序的初始化，供后续Container使用，这个逻辑只调用一次，通常由来自ApplicationMaster的第一个Container完成
+           */
           LOG.info("Creating a new application reference for app " + applicationID);
           LogAggregationContext logAggregationContext =
               containerTokenIdentifier.getLogAggregationContext();
@@ -848,17 +860,29 @@ public class ContainerManagerImpl extends CompositeService implements
           context.getNMStateStore().storeApplication(applicationID,
               buildAppProto(applicationID, user, credentials, appAcls,
                 logAggregationContext));
+
+          /**
+           * 向 ApplicationImpl 发送 ApplicationEventType.INIT_APPLICATION 事件
+           */
           dispatcher.getEventHandler().handle(
-            new ApplicationInitEvent(applicationID, appAcls,
-              logAggregationContext));
+            new ApplicationInitEvent(applicationID, appAcls, logAggregationContext));
+
         }
 
         this.context.getNMStateStore().storeContainer(containerId, request);
+
+
+        /**
+         *  向 ApplicationImpl 发送  ApplicationEventType.INIT_CONTAINER 事件
+         */
         dispatcher.getEventHandler().handle(
           new ApplicationContainerInitEvent(container));
 
+
         this.context.getContainerTokenSecretManager().startContainerSuccessful(
           containerTokenIdentifier);
+
+
         NMAuditLogger.logSuccess(user, AuditConstants.START_CONTAINER,
           "ContainerManageImpl", applicationID, containerId);
         // TODO launchedContainer misplaced -> doesn't necessarily mean a container

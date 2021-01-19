@@ -128,7 +128,10 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
 
   private NodeHeartbeatResponse latestNodeHeartBeatResponse = recordFactory
       .newRecordInstance(NodeHeartbeatResponse.class);
-  
+
+  /**
+   * 状态机工厂
+   */
   private static final StateMachineFactory<RMNodeImpl,
                                            NodeState,
                                            RMNodeEventType,
@@ -217,7 +220,7 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
          RMNodeEventType.FINISHED_CONTAINERS_PULLED_BY_AM,
          new AddContainersToBeRemovedFromNMTransition())
 
-     // create the topology tables
+     // create the topology tables ，installTopology完成一个状态机的构建
      .installTopology(); 
 
   private final StateMachine<NodeState, RMNodeEventType,

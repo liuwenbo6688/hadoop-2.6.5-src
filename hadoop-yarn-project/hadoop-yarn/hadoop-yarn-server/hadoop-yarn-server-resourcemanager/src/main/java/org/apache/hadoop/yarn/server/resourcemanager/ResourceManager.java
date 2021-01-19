@@ -116,7 +116,8 @@ import com.google.common.annotations.VisibleForTesting;
 /**
  * The ResourceManager is the main class that is a set of components.
  * "I am the ResourceManager. All your resources belong to us..."
- *
+ * 代表 Resource Manager 组件
+ * 包含很多组件
  */
 @SuppressWarnings("unchecked")
 public class ResourceManager extends CompositeService implements Recoverable {
@@ -153,7 +154,12 @@ public class ResourceManager extends CompositeService implements Recoverable {
   protected ResourceScheduler scheduler;
   protected ReservationSystem reservationSystem;
   private ClientRMService clientRM;
+
+  /**
+   * 与appMaster通信的组件
+   */
   protected ApplicationMasterService masterService;
+
   protected NMLivelinessMonitor nmLivelinessMonitor;
   protected NodesListManager nodesListManager;
   protected RMAppManager rmAppManager;
@@ -161,6 +167,10 @@ public class ResourceManager extends CompositeService implements Recoverable {
   protected QueueACLsManager queueACLsManager;
   private WebApp webApp;
   private AppReportFetcher fetcher = null;
+
+  /**
+   *
+   */
   protected ResourceTrackerService resourceTracker;
 
   @VisibleForTesting
@@ -244,7 +254,11 @@ public class ResourceManager extends CompositeService implements Recoverable {
     }
 
     // register the handlers for all AlwaysOn services using setupDispatcher().
+    /**
+     * 事件异步分发器
+     */
     rmDispatcher = setupDispatcher();
+
     addIfService(rmDispatcher);
     rmContext.setDispatcher(rmDispatcher);
 
@@ -293,6 +307,11 @@ public class ResourceManager extends CompositeService implements Recoverable {
   }
 
   protected ResourceScheduler createScheduler() {
+    /**
+     *  调度器的类由 yarn.resourcemanager.scheduler.class 参数指定（通过反射机制）
+     *
+     *  默认是 CapacityScheduler
+     */
     String schedulerClassName = conf.get(YarnConfiguration.RM_SCHEDULER,
         YarnConfiguration.DEFAULT_RM_SCHEDULER);
     LOG.info("Using Scheduler: " + schedulerClassName);
@@ -487,10 +506,19 @@ public class ResourceManager extends CompositeService implements Recoverable {
       rmContext.setNodesListManager(nodesListManager);
 
       // Initialize the scheduler
+      /**
+       * ****************************************************
+       * RM中非常重要的调度器组件，Scheduler
+       * CapacityScheduler
+       * FairScheduler
+       * FifoScheduler
+       * ****************************************************
+       */
       scheduler = createScheduler();
       scheduler.setRMContext(rmContext);
       addIfService(scheduler);
       rmContext.setScheduler(scheduler);
+
 
       schedulerDispatcher = createSchedulerEventDispatcher();
       addIfService(schedulerDispatcher);
@@ -642,9 +670,17 @@ public class ResourceManager extends CompositeService implements Recoverable {
   public static class SchedulerEventDispatcher extends AbstractService
       implements EventHandler<SchedulerEvent> {
 
+    /**
+     * RM的调度器
+     */
     private final ResourceScheduler scheduler;
+
+    /**
+     * 接收事件的阻塞队列
+     */
     private final BlockingQueue<SchedulerEvent> eventQueue =
       new LinkedBlockingQueue<SchedulerEvent>();
+
     private volatile int lastEventQueueSizeLogged = 0;
     private final Thread eventProcessor;
     private volatile boolean stopped = false;
@@ -675,6 +711,9 @@ public class ResourceManager extends CompositeService implements Recoverable {
       @Override
       public void run() {
 
+        /**
+         * 把事件转交给 scheduler 真正的调度器执行
+         */
         SchedulerEvent event;
 
         while (!stopped && !Thread.currentThread().isInterrupted()) {
@@ -686,6 +725,9 @@ public class ResourceManager extends CompositeService implements Recoverable {
           }
 
           try {
+            /**
+             * 事件转交给调度器Scheduler
+             */
             scheduler.handle(event);
           } catch (Throwable t) {
             // An error occurred, but we are shutting down anyway.

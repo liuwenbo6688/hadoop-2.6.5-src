@@ -316,6 +316,7 @@ public class LogAggregationService extends AbstractService implements
       LogAggregationContext logAggregationContext) {
     ApplicationEvent eventResponse;
     try {
+      // 创建应用程序日志目录、设置目录权限等
       verifyAndCreateRemoteLogDir(getConfig());
       initAppAggregator(appId, user, credentials, logRetentionPolicy, appAcls,
           logAggregationContext);
@@ -326,6 +327,8 @@ public class LogAggregationService extends AbstractService implements
       eventResponse = new ApplicationEvent(appId,
           ApplicationEventType.APPLICATION_LOG_HANDLING_FAILED);
     }
+
+    // 向 ApplicationImpl 发送 ApplicationEventType.APPLICATION_LOG_HANDLING_INITED 事件
     this.dispatcher.getEventHandler().handle(eventResponse);
   }
   
@@ -437,9 +440,13 @@ public class LogAggregationService extends AbstractService implements
   @Override
   public void handle(LogHandlerEvent event) {
     switch (event.getType()) {
+      // 启动 APPLICATION 的处理逻辑
       case APPLICATION_STARTED:
         LogHandlerAppStartedEvent appStartEvent =
             (LogHandlerAppStartedEvent) event;
+        /**
+         *
+         */
         initApp(appStartEvent.getApplicationId(), appStartEvent.getUser(),
             appStartEvent.getCredentials(),
             appStartEvent.getLogRetentionPolicy(),

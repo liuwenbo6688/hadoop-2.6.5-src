@@ -162,6 +162,9 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
     ((RMContainerImpl)rmContainer).setResourceRequests(resourceRequestList);
 
     // Inform the container
+    /**
+     *  通知启动 container
+     */
     rmContainer.handle(
         new RMContainerEvent(container.getId(), RMContainerEventType.START));
 

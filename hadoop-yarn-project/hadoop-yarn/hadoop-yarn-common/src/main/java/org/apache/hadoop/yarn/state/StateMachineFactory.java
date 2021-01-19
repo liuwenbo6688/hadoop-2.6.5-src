@@ -30,15 +30,25 @@ import org.apache.hadoop.classification.InterfaceAudience.Public;
 import org.apache.hadoop.classification.InterfaceStability.Evolving;
 
 /**
+ *
  * State machine topology.
  * This object is semantically immutable.  If you have a
  * StateMachineFactory there's no operation in the API that changes
  * its semantic properties.
  *
+ * StateMachineFactory用于构建状态机拓扑
+ *
  * @param <OPERAND> The object type on which this state machine operates.
+ *                  状态机操作此对象类型
+ *
  * @param <STATE> The state of the entity.
+ *                 实体的状态
+ *
  * @param <EVENTTYPE> The external eventType to be handled.
+ *                     处理的外部事件类型
+ *
  * @param <EVENT> The event object.
+ *                事件对象
  *
  */
 @Public
@@ -156,6 +166,8 @@ final public class StateMachineFactory
    * @param preState pre-transition state
    * @param postState post-transition state
    * @param eventType stimulus for the transition
+   *
+   * 一个初始状态、一个最终状态、一种事件
    */
   public StateMachineFactory
              <OPERAND, STATE, EVENTTYPE, EVENT>
@@ -177,6 +189,8 @@ final public class StateMachineFactory
    * @param preState pre-transition state
    * @param postState post-transition state
    * @param eventTypes List of stimuli for the transitions
+   *
+   * 一个初始状态、一个最终状态，多种事件
    */
   public StateMachineFactory<OPERAND, STATE, EVENTTYPE, EVENT> addTransition(
       STATE preState, STATE postState, Set<EVENTTYPE> eventTypes) {
@@ -226,7 +240,8 @@ final public class StateMachineFactory
    */
   public StateMachineFactory
              <OPERAND, STATE, EVENTTYPE, EVENT>
-          addTransition(STATE preState, STATE postState,
+          addTransition(STATE preState,
+                        STATE postState,
                         EVENTTYPE eventType,
                         SingleArcTransition<OPERAND, EVENT> hook){
     return new StateMachineFactory<OPERAND, STATE, EVENTTYPE, EVENT>
@@ -273,6 +288,7 @@ final public class StateMachineFactory
    *
    * Calling this is optional.  It doesn't change the semantics of the factory,
    *   if you call it then when you use the factory there is no synchronization.
+   * 完成一个状态机的构建
    */
   public StateMachineFactory
              <OPERAND, STATE, EVENTTYPE, EVENT>
@@ -427,6 +443,10 @@ final public class StateMachineFactory
   private class InternalStateMachine
         implements StateMachine<STATE, EVENTTYPE, EVENT> {
     private final OPERAND operand;
+
+    /**
+     * 当前状态
+     */
     private STATE currentState;
 
     InternalStateMachine(OPERAND operand, STATE initialState) {

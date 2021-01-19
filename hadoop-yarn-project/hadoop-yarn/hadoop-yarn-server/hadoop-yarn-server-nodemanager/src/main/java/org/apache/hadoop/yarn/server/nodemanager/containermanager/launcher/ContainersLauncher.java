@@ -63,12 +63,21 @@ public class ContainersLauncher extends AbstractService
   private final ContainerManagerImpl containerManager;
 
   private LocalDirsHandlerService dirsHandler;
+
+
+  /**
+   * 启动 container 的线程池
+   */
   @VisibleForTesting
   public ExecutorService containerLauncher =
-    Executors.newCachedThreadPool(
-        new ThreadFactoryBuilder()
-          .setNameFormat("ContainersLauncher #%d")
-          .build());
+          Executors.newCachedThreadPool(
+                  new ThreadFactoryBuilder()
+                          .setNameFormat("ContainersLauncher #%d")
+                          .build());
+
+  /**
+   * 缓存当前正在运行中的container
+   */
   @VisibleForTesting
   public final Map<ContainerId, ContainerLaunch> running =
     Collections.synchronizedMap(new HashMap<ContainerId, ContainerLaunch>());
@@ -107,17 +116,24 @@ public class ContainersLauncher extends AbstractService
     Container container = event.getContainer();
     ContainerId containerId = container.getContainerId();
     switch (event.getType()) {
+
       case LAUNCH_CONTAINER:
+
         Application app =
           context.getApplications().get(
               containerId.getApplicationAttemptId().getApplicationId());
 
+        /**
+         * LAUNCH_CONTAINER事件的处理逻辑，创建 ContainerLaunch 线程并启动线程
+         */
         ContainerLaunch launch =
             new ContainerLaunch(context, getConfig(), dispatcher, exec, app,
               event.getContainer(), dirsHandler, containerManager);
         containerLauncher.submit(launch);
+
         running.put(containerId, launch);
         break;
+
       case RECOVER_CONTAINER:
         app = context.getApplications().get(
             containerId.getApplicationAttemptId().getApplicationId());

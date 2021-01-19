@@ -240,6 +240,12 @@ public class ApplicationImpl implements Application {
       app.aclsManager.addApplication(app.getAppId(), app.applicationACLs);
       // Inform the logAggregator
       app.logAggregationContext = initEvent.getLogAggregationContext();
+
+      /**
+       * 向 LogHandler 发送 LogHandlerEventType.APPLICATION_STARTED 事件
+       *
+       * LogAggregationService.handle()
+       */
       app.dispatcher.getEventHandler().handle(
           new LogHandlerAppStartedEvent(app.appId, app.user,
               app.credentials, ContainerLogsRetentionPolicy.ALL_CONTAINERS,
@@ -303,19 +309,23 @@ public class ApplicationImpl implements Application {
       app.containers.put(container.getContainerId(), container);
       LOG.info("Adding " + container.getContainerId()
           + " to application " + app.toString());
-      
+
       switch (app.getApplicationState()) {
-      case RUNNING:
-        app.dispatcher.getEventHandler().handle(new ContainerInitEvent(
-            container.getContainerId()));
-        break;
-      case INITING:
-      case NEW:
-        // these get queued up and sent out in AppInitDoneTransition
-        break;
-      default:
-        assert false : "Invalid state for InitContainerTransition: " +
-            app.getApplicationState();
+
+        case RUNNING:
+          /**
+           * 应用程序提交后app是RUNNING状态，这里向调度器发送 ContainerEventType.INIT_CONTAINER 事件
+           */
+          app.dispatcher.getEventHandler().handle(new ContainerInitEvent(
+                  container.getContainerId()));
+          break;
+        case INITING:
+        case NEW:
+          // these get queued up and sent out in AppInitDoneTransition
+          break;
+        default:
+          assert false : "Invalid state for InitContainerTransition: " +
+                  app.getApplicationState();
       }
     }
   }

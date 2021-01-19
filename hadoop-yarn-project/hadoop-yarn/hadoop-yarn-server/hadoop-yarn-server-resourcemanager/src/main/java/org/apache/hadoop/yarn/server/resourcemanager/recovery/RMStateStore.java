@@ -213,9 +213,13 @@ public abstract class RMStateStore extends AbstractService {
         }
         store.storeApplicationAttemptStateInternal(attemptState.getAttemptId(),
             attemptStateData);
+        /**
+         *
+         */
         store.notifyApplicationAttempt(new RMAppAttemptEvent
                (attemptState.getAttemptId(),
                RMAppAttemptEventType.ATTEMPT_NEW_SAVED));
+
       } catch (Exception e) {
         LOG.error("Error storing appAttempt: " + attemptState.getAttemptId(), e);
         store.notifyStoreOperationFailed(e);
