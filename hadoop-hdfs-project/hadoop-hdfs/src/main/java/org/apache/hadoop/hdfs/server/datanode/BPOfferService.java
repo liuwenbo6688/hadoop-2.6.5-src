@@ -57,8 +57,16 @@ class BPOfferService {
    * Information about the namespace that this service
    * is registering with. This is assigned after
    * the first phase of the handshake.
+   * 第1个namenode返回 NamespaceInfo，只保存
+   * 第2个namenode返回NamespaceInfo，比较2个NamespaceInfo的某些信息是否匹配
    */
   NamespaceInfo bpNSInfo;
+
+  /**
+   * TODO LIUWENBO
+   * volatile 变量，保证可见性
+   */
+  volatile String blockPoolId;
 
   /**
    * The registration information for this block pool.
@@ -96,7 +104,23 @@ class BPOfferService {
 
   private final ReentrantReadWriteLock mReadWriteLock =
       new ReentrantReadWriteLock();
+
+  /**
+   * （1）getBlockPoolId(),   从BPOfferService中管理的一个NamespaceInfo数据里提取出来对应的NameNode的blockPoolID这个核心的id数据
+   * （2）getNamespaceInfo(), 直接获取核心的NamespaceInfo数据
+   * （3）getActiveNN(),      获取Active NameNode对应的rpc接口代理
+   */
   private final Lock mReadLock  = mReadWriteLock.readLock();
+
+  /**
+   *  施加写锁的场景
+   * （1）BPServiceActor获取到了NamespaceInfo，设置这个数据
+   * （2）BPServiceActor准备向NameNode注册的时候，会创建一个DatanodeRegistration数据
+   * （3）BPServiceActor注册成功了之后，会来设置DatanodeRegistration这个数据
+   * （4）如果DataNode关闭，此时就会关闭某个BPServiceActor，此时会清空一些数据
+   * （5）每隔3秒钟跟NameNode进行一次心跳，如果发现NameNode的active/standby状态发生了变化，此时就会更新一些数据
+   * （6）每次发送心跳给NameNode都有可能会带回来一些指令，比如说通知DataNode复制某个block副本到其他的DataNode上去 【高频发生 processCommandFromActor()】
+   */
   private final Lock mWriteLock = mReadWriteLock.writeLock();
 
   // utility methods to acquire and release read lock and write lock
@@ -165,7 +189,27 @@ class BPOfferService {
     return false;
   }
 
+  /**
+   * TODO LIUWENBO
+   * getBlockPoolId()，这个操作，绝对是DataNode里的一个高频率的很频繁的操作，证明了高频率的通过执行这个操作来加 BPOfferService 里的读锁
+   *
+   * （1）每隔几分钟的频率去汇报增量更新的block给namenode
+   * （2）blockReport()全量块汇报                BPServiceActor#blockReport()
+   * （3）cacheReport()缓存块汇报                BPServiceActor#cacheReport()
+   * （4）每隔3秒钟都会发送一次心跳，都会调用这个操作  BPServiceActor#sendHeartBeat()
+   * （5）其他的一些操作
+   *
+   * 尤其是每隔3秒钟发送心跳，以及每隔几分钟汇报block给namenode，这些东西，其实都是高频率的操作，所以说BPOfferService里面的getBlockPoolId()操作是高频率的操作，证明了会高频率的加读锁
+   *
+   * @return
+   */
   String getBlockPoolId() {
+
+    // todo LIUWENBO
+    if(blockPoolId != null) {
+      return blockPoolId;
+    }
+
     readLock();
     try {
       if (bpNSInfo != null) {
@@ -341,6 +385,11 @@ class BPOfferService {
             "Namespace ID");
         checkNSEquality(bpNSInfo.getClusterID(), nsInfo.getClusterID(),
             "Cluster ID");
+
+        // TODO LIUWENBO
+        if(blockPoolId != null) {
+           this.blockPoolId =  nsInfo.getBlockPoolID();
+        }
       }
     } finally {
       writeUnlock();
@@ -459,6 +508,8 @@ class BPOfferService {
   /**
    * @return a proxy to the active NN, or null if the BPOS has not
    * acknowledged any NN as active yet.
+   *
+   * 获取Active NameNode对应的rpc接口代理
    */
   DatanodeProtocolClientSideTranslatorPB getActiveNN() {
     readLock();
@@ -617,6 +668,14 @@ class BPOfferService {
     writeLock();
     try {
       if (actor == bpServiceToActive) {
+        // 从active返回的命令
+        // 要不就是不执行，要不就是高频执行
+        /**
+         * （1）分析一下每次发送心跳给NameNode可能会带回来一些指令
+         * （2）如果需要执行指令的话，那么就需要加写锁，哪些场景下会执行指令：复制块、删除块、缓存块、finalize块、恢复块
+         * （3）要么不执行，要么就是短时间内可能就是高频率的执行指令，比如说你现在突然之间集群里就是下线了几台datanode机器，此时他们那些机器上的block副本，都需要下发指令给其他的datanode进行复制
+         * （4）你在执行一些运维操作的时候，短时间内会有大量的块操作的指令，此时就会在一些运维操作的，短时间内频繁的加写锁
+         */
         return processCommandFromActive(cmd, actor);
       } else {
         return processCommandFromStandby(cmd, actor);

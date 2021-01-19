@@ -67,6 +67,7 @@ public class DU extends Shell {
 
     //populate the used variable if the initial value is not specified.
     if (initialUsed < 0) {
+      // 这次重启datanode，超过10分钟的情况下，执行du命令
       run();
     } else {
       this.used.set(initialUsed);
@@ -92,8 +93,9 @@ public class DU extends Shell {
    */
   public DU(File path, Configuration conf, long initialUsed)
       throws IOException {
-    this(path, conf.getLong(CommonConfigurationKeys.FS_DU_INTERVAL_KEY,
-                CommonConfigurationKeys.FS_DU_INTERVAL_DEFAULT), initialUsed);
+    this(path,
+         conf.getLong(CommonConfigurationKeys.FS_DU_INTERVAL_KEY, CommonConfigurationKeys.FS_DU_INTERVAL_DEFAULT),
+         initialUsed);
   }
     
   
@@ -187,7 +189,11 @@ public class DU extends Shell {
       used.set(DUHelper.getFolderUsage(dirPath));
       return;
     }
+
+    // 调用 shell 的run方法
+    // 执行du -sk命令，这个可能是非常耗时的操作
     super.run();
+
   }
   
   /**

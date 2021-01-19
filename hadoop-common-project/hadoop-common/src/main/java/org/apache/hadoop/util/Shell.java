@@ -475,12 +475,20 @@ abstract public class Shell {
     if (lastTime + interval > Time.now())
       return;
     exitCode = 0; // reset for next run
+    /**
+     *
+     */
     runCommand();
   }
 
   /** Run a command */
-  private void runCommand() throws IOException { 
+  private void runCommand() throws IOException {
+
+    /**
+     *  getExecString() 取到具体的命令
+     */
     ProcessBuilder builder = new ProcessBuilder(getExecString());
+
     Timer timeOutTimer = null;
     ShellTimeoutTimerTask timeoutTimerTask = null;
     timedOut = new AtomicBoolean(false);

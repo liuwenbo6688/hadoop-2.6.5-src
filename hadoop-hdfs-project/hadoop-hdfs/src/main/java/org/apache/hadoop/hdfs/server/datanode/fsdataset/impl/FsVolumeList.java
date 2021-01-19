@@ -305,16 +305,22 @@ class FsVolumeList {
       Thread t = new Thread() {
         public void run() {
           try {
-            FsDatasetImpl.LOG.info("Scanning block pool " + bpid +
-                " on volume " + v + "...");
+            FsDatasetImpl.LOG.info("Scanning block pool " + bpid + " on volume " + v + "...");
+
             long startTime = Time.monotonicNow();
+            /**
+             * ******
+             * 卡在这里
+             * ******
+             */
             v.addBlockPool(bpid, conf);
+
             long timeTaken = Time.monotonicNow() - startTime;
-            FsDatasetImpl.LOG.info("Time taken to scan block pool " + bpid +
-                " on " + v + ": " + timeTaken + "ms");
+
+            FsDatasetImpl.LOG.info("Time taken to scan block pool " + bpid + " on " + v + ": " + timeTaken + "ms");
+
           } catch (IOException ioe) {
-            FsDatasetImpl.LOG.info("Caught exception while scanning " + v +
-                ". Will throw later.", ioe);
+            FsDatasetImpl.LOG.info("Caught exception while scanning " + v + ". Will throw later.", ioe);
             exceptions.add(ioe);
           }
         }
@@ -324,11 +330,12 @@ class FsVolumeList {
     }
     for (Thread t : blockPoolAddingThreads) {
       try {
-        t.join();
+        t.join();// 线程同步等待
       } catch (InterruptedException ie) {
         throw new IOException(ie);
       }
     }
+
     if (!exceptions.isEmpty()) {
       throw exceptions.get(0);
     }

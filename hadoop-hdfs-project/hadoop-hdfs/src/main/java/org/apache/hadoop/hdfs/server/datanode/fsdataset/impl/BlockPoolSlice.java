@@ -84,6 +84,8 @@ class BlockPoolSlice {
   // TODO:FEDERATION scalability issue - a thread per DU is needed
   private final DU dfsUsage;
 
+  private final long executeDuThreshold;
+
   /**
    * Create a blook pool slice 
    * @param bpid Block pool Id
@@ -109,6 +111,10 @@ class BlockPoolSlice {
     this.deleteDuplicateReplicas = conf.getBoolean(
         DFSConfigKeys.DFS_DATANODE_DUPLICATE_REPLICA_DELETION,
         DFSConfigKeys.DFS_DATANODE_DUPLICATE_REPLICA_DELETION_DEFAULT);
+
+    this.executeDuThreshold = conf.getLong(
+            DFSConfigKeys.DFS_DATANODE_EXECUTE_DU_COMMAND_THRESHOLD,
+            DFSConfigKeys.DFS_DATANODE_EXECUTE_DU_COMMAND_THRESHOLD_DEFAULT);
 
     // Files that were being written when the datanode was last shutdown
     // are now moved back to the data directory. It is possible that
@@ -136,10 +142,19 @@ class BlockPoolSlice {
         throw new IOException("Mkdirs failed to create " + tmpDir.toString());
       }
     }
+
+    /**
+     * du 命令
+     */
     // Use cached value initially if available. Or the following call will
     // block until the initial du command completes.
-    this.dfsUsage = new DU(bpDir, conf, loadDfsUsed());
+    this.dfsUsage = new DU(
+            bpDir,
+            conf,
+            loadDfsUsed()/* */
+    );
     this.dfsUsage.start();
+
 
     // Make the dfs usage to be saved during shutdown.
     ShutdownHookManager.get().addShutdownHook(
@@ -213,12 +228,17 @@ class BlockPoolSlice {
         return -1;
       }
 
+      // TODO liuwenbo  （这个参数可以调大一点）
       // Return the cached value if mtime is okay.
-      if (mtime > 0 && (Time.now() - mtime < 600000L)) {
+//      if (mtime > 0 && (Time.now() - mtime < 600000L)) { // 如果当前时间- 上次更新时间不超过10分钟，直接使用缓存好的 dfsUsed
+      if (mtime > 0 && (Time.now() - mtime < executeDuThreshold)) { // 如果当前时间- 上次更新时间不超过10分钟，直接使用缓存好的 dfsUsed
+
         FsDatasetImpl.LOG.info("Cached dfsUsed found for " + currentDir + ": " +
             cachedDfsUsed);
         return cachedDfsUsed;
       }
+
+      //
       return -1;
     } finally {
       sc.close();

@@ -847,7 +847,9 @@ public class DatanodeManager {
     if (node.isDecommissionInProgress() && node.checkBlockReportReceived()) {
 
       /**
-       *
+       * **** isReplicationInProgress() ****
+       * 正常来说，如果你要对一个datanode下线的话
+       * 必须要对这个datanode所有的block副本都生成复制的任务，也就是放到 neededReplications
        */
       if (!blockManager.isReplicationInProgress(node)) {
         // 标记为 DECOMMISSIONED
@@ -891,9 +893,15 @@ public class DatanodeManager {
       // the dead node comes back and send in its full block report.
       if (node.isAlive) {
         blockManager.processOverReplicatedBlocksOnReCommission(node);
+
+        // TODO LIUWENBO
+        blockManager.removeReCommissionedReplicateTasks(node);
+
+
       }
     }
   }
+
 
   /**
    * Register the given datanode with the namenode. NB: the given
@@ -1127,11 +1135,14 @@ public class DatanodeManager {
         if (hostFileManager.isExcluded(node)) {
 
           /**
-           *
+           * 在excluded文件中，开始下线
            */
           startDecommission(node); // case 3.
 
         } else {
+          /**
+           * 不在excluded文件中，中止下线
+           */
           stopDecommission(node); // case 4.
         }
       }

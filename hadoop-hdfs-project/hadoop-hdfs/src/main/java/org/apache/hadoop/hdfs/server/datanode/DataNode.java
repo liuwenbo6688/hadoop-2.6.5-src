@@ -1383,7 +1383,10 @@ public class DataNode extends ReconfigurableBase
     checkDiskError();
 
     /**
-     *
+     * *********************************
+     * 初始化 block pool
+     * 这个方法里可能引起Datanode的慢启动问题
+     * *********************************
      */
     data.addBlockPool(nsInfo.getBlockPoolID(), conf);
 
@@ -1430,7 +1433,7 @@ public class DataNode extends ReconfigurableBase
 
     synchronized(this)  {
       if (data == null) {
-        // 创建一个FsDatasetSpi
+        // 创建一个FsDatasetSpi(FsDatasetImpl)
         data = factory.newInstance(this, storage, conf);
       }
     }

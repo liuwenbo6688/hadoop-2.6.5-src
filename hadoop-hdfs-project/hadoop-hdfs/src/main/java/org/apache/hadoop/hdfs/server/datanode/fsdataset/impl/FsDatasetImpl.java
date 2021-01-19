@@ -42,6 +42,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.*;
 import java.util.concurrent.Executor;
+import java.util.concurrent.locks.ReentrantLock;
 
 import javax.management.NotCompliantMBeanException;
 import javax.management.ObjectName;
@@ -114,6 +115,8 @@ import org.apache.hadoop.util.Time;
 /**************************************************
  * FSDataset manages a set of data blocks.  Each block
  * has a unique name and an extent on disk.
+ *
+ * Datanode最重要的功能之一管理与操作数据块功能（创建数据块文件、维护数据块文件与数据块校验文件的对应关系等）由FsDatasetImpl类实现。
  *
  ***************************************************/
 @InterfaceAudience.Private
@@ -243,6 +246,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
 
   // Used for synchronizing access to usage stats
   private final Object statsLock = new Object();
+
+  ReentrantLock fsLock = new ReentrantLock(true);
 
   /**
    * An FSDataset has a directory where it loads its data files.
@@ -1310,23 +1315,63 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
 
   /**
    * Complete the block write!
+   * 完成block的写入
    */
   @Override // FsDatasetSpi
   public synchronized void finalizeBlock(ExtendedBlock b) throws IOException {
-    if (Thread.interrupted()) {
-      // Don't allow data modifications from interrupted threads
-      throw new IOException("Cannot finalize block from Interrupted Thread");
+
+
+    ReplicaInfo replicaInfo = null;
+    FinalizedReplica finalizedReplicaInfo = null;
+
+    try {
+      fsLock.lock(); // 加锁
+      if (Thread.interrupted()) {
+        // Don't allow data modifications from interrupted threads
+        throw new IOException("Cannot finalize block from Interrupted Thread");
+      }
+      replicaInfo = getReplicaInfo(b);
+      if (replicaInfo.getState() == ReplicaState.FINALIZED) {
+        // this is legal, when recovery happens on a file that has
+        // been opened for append but never modified
+        return;
+      }
+      /**
+       *
+       */
+      finalizedReplicaInfo = finalizeReplica(b.getBlockPoolId(), replicaInfo);
+    } finally {
+      fsLock.lock(); // 释放锁
     }
-    ReplicaInfo replicaInfo = getReplicaInfo(b);
-    if (replicaInfo.getState() == ReplicaState.FINALIZED) {
-      // this is legal, when recovery happens on a file that has
-      // been opened for append but never modified
-      return;
+
+
+    //TODO LIUWENBO  耗时操作放到锁的外部
+    if(true) {
+      fsync(replicaInfo.getBlockFile().getParentFile());
+      fsync(finalizedReplicaInfo.getBlockFile().getParentFile());
     }
-    /**
-     *
-     */
-    finalizeReplica(b.getBlockPoolId(), replicaInfo);
+
+  }
+
+  // 强制刷新到磁盘
+  private void fsync(File fileToSync) {
+    FileChannel channel = null;
+    try {
+      boolean isDir = fileToSync.isDirectory();
+
+      channel = FileChannel.open(fileToSync.toPath(),
+              isDir ? StandardOpenOption.READ : StandardOpenOption.WRITE);
+
+      channel.force(true);
+    } catch (Exception e) {
+      e.printStackTrace();
+    } finally {
+      try {
+        channel.close();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
   }
   
   private synchronized FinalizedReplica finalizeReplica(String bpid,
@@ -1363,29 +1408,6 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
 
     return newReplicaInfo;
   }
-
-
-  private void fsync(File fileToSync) {
-      FileChannel channel = null;
-
-      try {
-        boolean isDir = fileToSync.isDirectory();
-
-        channel = FileChannel.open(fileToSync.toPath(),
-                isDir ? StandardOpenOption.READ : StandardOpenOption.WRITE);
-
-        channel.force(true);
-      } catch (Exception e) {
-        e.printStackTrace();
-      } finally {
-        try {
-          channel.close();
-        } catch (IOException e) {
-          e.printStackTrace();
-        }
-      }
-  }
-
 
 
   /**
@@ -2314,9 +2336,15 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   @Override
   public void addBlockPool(String bpid, Configuration conf)
       throws IOException {
+    //卡在这里了
     LOG.info("Adding block pool " + bpid);
     synchronized(this) {
+      /**
+       *
+       */
       volumes.addBlockPool(bpid, conf);
+
+
       volumeMap.initBlockPool(bpid);
     }
     volumes.getAllVolumesMap(bpid, volumeMap, ramDiskReplicaTracker);

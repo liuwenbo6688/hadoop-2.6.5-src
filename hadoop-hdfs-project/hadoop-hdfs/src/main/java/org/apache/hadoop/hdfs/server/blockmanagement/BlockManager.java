@@ -198,6 +198,7 @@ public class BlockManager {
   /**
    * Maps a StorageID to the set of blocks that are "extra" for this
    * DataNode. We'll eventually remove these extras.
+   * 副本数量过多的集合
    */
   public final Map<String, LightWeightLinkedSet<Block>> excessReplicateMap =
     new TreeMap<String, LightWeightLinkedSet<Block>>();
@@ -3356,6 +3357,39 @@ public class BlockManager {
   }
 
   /**
+   * TODO LIUWENBO
+   *
+   *
+   * @param node
+   */
+  void removeReCommissionedReplicateTasks(DatanodeDescriptor node) {
+
+    Iterator<? extends Block> iterator = node.getBlockIterator();
+    while (iterator.hasNext()) {
+      final Block block = iterator.next();
+      BlockCollection blockCollection = blocksMap
+              .getBlockCollection(block);
+      if (blockCollection == null) {
+        continue;
+      }
+
+      NumberReplicas numberReplicas = countNodes(block);
+      int liveReplicas = numberReplicas.liveReplicas();
+      int curReplicas = liveReplicas;
+      if (!isNeededReplication(block, blockCollection.getBlockReplication(), curReplicas)) {
+        neededReplications.remove(
+                block,
+                curReplicas,
+                numberReplicas.decommissionedReplicas(),
+                blockCollection.getBlockReplication());
+      }
+
+    }
+  }
+
+
+
+  /**
    * Return true if there are any blocks on this node that have not
    * yet reached their replication factor. Otherwise returns false.
    *
@@ -3379,7 +3413,7 @@ public class BlockManager {
       if (bc != null) {
         NumberReplicas num = countNodes(block);
         int curReplicas = num.liveReplicas();
-        int curExpectedReplicas = getReplication(block);
+        int curExpectedReplicas = getReplication(block); // 期望的副本数
 
         if (curReplicas < curExpectedReplicas
             || !isPlacementPolicySatisfied(block)) {
@@ -3535,6 +3569,7 @@ public class BlockManager {
   /** 
    * @return 0 if the block is not found;
    *         otherwise, return the replication factor of the block.
+   *         返回这个block的复制因子数，默认就是3
    */
   private int getReplication(Block block) {
     final BlockCollection bc = blocksMap.getBlockCollection(block);

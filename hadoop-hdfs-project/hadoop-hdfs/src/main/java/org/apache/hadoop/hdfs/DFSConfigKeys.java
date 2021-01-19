@@ -758,4 +758,7 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   //TODO liuwenbo
   public static final String  DFS_NAMENODE_OUTPUT_BUFFER_CAPACITY_KEY = "dfs.namenode.output.buffer.capacity";
   public static final int     DFS_NAMENODE_OUTPUT_BUFFER_CAPACITY_DEFAULT = 52 * 1024;
+
+  public static final String  DFS_DATANODE_EXECUTE_DU_COMMAND_THRESHOLD = "dfs.datanode.execute.du.command.threshold";
+  public static final long    DFS_DATANODE_EXECUTE_DU_COMMAND_THRESHOLD_DEFAULT = 6 * 60 * 60 * 1000;
 }

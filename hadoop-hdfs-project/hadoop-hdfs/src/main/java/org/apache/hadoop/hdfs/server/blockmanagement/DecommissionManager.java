@@ -67,6 +67,9 @@ class DecommissionManager {
       for(; namesystem.isRunning(); ) {
         namesystem.writeLock();
         try {
+          /**
+           *
+           */
           check();
         } finally {
           namesystem.writeUnlock();
@@ -88,8 +91,11 @@ class DecommissionManager {
         final DatanodeDescriptor d = entry.getValue();
         firstkey = entry.getKey();
 
-        if (d.isDecommissionInProgress()) {
+        if (d.isDecommissionInProgress()) { // 如果状态是 DECOMMISSION_INPROGRESS
           try {
+            /**
+             *
+             */
             dm.checkDecommissionState(d);
           } catch(Exception e) {
             LOG.warn("entry=" + entry, e);
