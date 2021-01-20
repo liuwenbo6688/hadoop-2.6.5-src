@@ -161,6 +161,9 @@ import com.google.common.annotations.VisibleForTesting;
  * register to the Dispatcher.
  * 
  * The information is shared across different components using AppContext.
+ *
+ * MRAppMaster正是MapReduce在Yarn上ApplicationMaster的实现，由其控制MR作业在Yarn上的执行
+ * MRAppMaster继承自CompositeService，而CompositeService又继承自AbstractService，也就是说MRAppMaster也是Hadoop中的一种服务
  */
 
 @SuppressWarnings("rawtypes")
@@ -403,6 +406,10 @@ public class MRAppMaster extends CompositeService {
       dispatcher.register(TaskEventType.class, new TaskEventDispatcher());
       dispatcher.register(TaskAttemptEventType.class, 
           new TaskAttemptEventDispatcher());
+
+      /**
+       *
+       */
       dispatcher.register(CommitterEventType.class, committerEventHandler);
 
       if (conf.getBoolean(MRJobConfig.MAP_SPECULATIVE, false)
@@ -456,6 +463,9 @@ public class MRAppMaster extends CompositeService {
         LOG.info("OutputCommitter set in config "
             + conf.get("mapred.output.committer.class"));
 
+        /**
+         * 新老版本的API,走不同的逻辑
+         */
         if (newApiCommitter) {
           org.apache.hadoop.mapreduce.v2.api.records.TaskId taskID =
               MRBuilderUtils.newTaskId(jobId, 0, TaskType.MAP);
@@ -467,6 +477,7 @@ public class MRAppMaster extends CompositeService {
           try {
             outputFormat = ReflectionUtils.newInstance(taskContext
                 .getOutputFormatClass(), conf);
+
             committer = outputFormat.getOutputCommitter(taskContext);
           } catch (Exception e) {
             throw new YarnRuntimeException(e);
@@ -1021,6 +1032,10 @@ public class MRAppMaster extends CompositeService {
             nmPort, nmHttpPort);
 
     // /////////////////// Create the job itself.
+    /**
+     *  调用createJob()方法创建作业Job实例
+     *  JobImpl
+     */
     job = createJob(getConfig(), forcedState, shutDownMessage);
 
     // End of creating the job.
@@ -1049,11 +1064,12 @@ public class MRAppMaster extends CompositeService {
 
     boolean initFailed = false;
     if (!errorHappenedShutDown) {
-      // create a job event for job intialization
+
+
+      /**
+       *  向 JobImpl 发送 JobEventType.JOB_INIT 事件
+       */
       JobEvent initJobEvent = new JobEvent(job.getID(), JobEventType.JOB_INIT);
-      // Send init to the job (this does NOT trigger job execution)
-      // This is a synchronous call, not an event through dispatcher. We want
-      // job-init to be done completely here.
       jobEventDispatcher.handle(initJobEvent);
 
       // If job is still not initialized, an error happened during
@@ -1094,6 +1110,11 @@ public class MRAppMaster extends CompositeService {
       jobEventDispatcher.handle(initFailedEvent);
     } else {
       // All components have started, start the job.
+      /**
+       * ******************************
+       * 调用startJobs()方法启动作业
+       * ******************************
+       */
       startJobs();
     }
   }
@@ -1278,6 +1299,9 @@ public class MRAppMaster extends CompositeService {
     /** create a job-start event to get this ball rolling */
     JobEvent startJobEvent = new JobStartEvent(job.getID(),
         recoveredJobStartTime);
+    /**
+     *  发送  JobEventType.JOB_START
+     */
     /** send the job-start event. this triggers the job execution. */
     dispatcher.getEventHandler().handle(startJobEvent);
   }
@@ -1286,6 +1310,9 @@ public class MRAppMaster extends CompositeService {
     @SuppressWarnings("unchecked")
     @Override
     public void handle(JobEvent event) {
+      /**
+       *  从应用运行上下文信息context中根据jobId获取Job实例，即JobImpl对象，调用其handle()方法，处理对应事件
+       */
       ((EventHandler<JobEvent>)context.getJob(event.getJobId())).handle(event);
     }
   }

@@ -252,11 +252,13 @@ public class JobImpl implements org.apache.hadoop.mapreduce.v2.app.job.Job,
               DIAGNOSTIC_UPDATE_TRANSITION)
           .addTransition(JobStateInternal.NEW, JobStateInternal.NEW,
               JobEventType.JOB_COUNTER_UPDATE, COUNTER_UPDATE_TRANSITION)
+          // 初始化job， NEW -> INITED
           .addTransition
               (JobStateInternal.NEW,
               EnumSet.of(JobStateInternal.INITED, JobStateInternal.NEW),
               JobEventType.JOB_INIT,
               new InitTransition())
+
           .addTransition(JobStateInternal.NEW, JobStateInternal.FAIL_ABORT,
               JobEventType.JOB_INIT_FAILED,
               new InitFailedTransition())
@@ -279,9 +281,11 @@ public class JobImpl implements org.apache.hadoop.mapreduce.v2.app.job.Job,
               DIAGNOSTIC_UPDATE_TRANSITION)
           .addTransition(JobStateInternal.INITED, JobStateInternal.INITED,
               JobEventType.JOB_COUNTER_UPDATE, COUNTER_UPDATE_TRANSITION)
+          // 启动job
           .addTransition(JobStateInternal.INITED, JobStateInternal.SETUP,
               JobEventType.JOB_START,
               new StartTransition())
+
           .addTransition(JobStateInternal.INITED, JobStateInternal.KILLED,
               JobEventType.JOB_KILL,
               new KillInitedJobTransition())
@@ -301,9 +305,12 @@ public class JobImpl implements org.apache.hadoop.mapreduce.v2.app.job.Job,
               DIAGNOSTIC_UPDATE_TRANSITION)
           .addTransition(JobStateInternal.SETUP, JobStateInternal.SETUP,
               JobEventType.JOB_COUNTER_UPDATE, COUNTER_UPDATE_TRANSITION)
+
+          //
           .addTransition(JobStateInternal.SETUP, JobStateInternal.RUNNING,
               JobEventType.JOB_SETUP_COMPLETED,
               new SetupCompletedTransition())
+
           .addTransition(JobStateInternal.SETUP, JobStateInternal.FAIL_ABORT,
               JobEventType.JOB_SETUP_FAILED,
               new SetupFailedTransition())
@@ -968,17 +975,28 @@ public class JobImpl implements org.apache.hadoop.mapreduce.v2.app.job.Job,
     }
   }
 
+  /**
+   *
+   * @param taskIDs   作业Job待调度任务的任务ID集合
+   * @param recoverTaskOutput   是否恢复任务输出的标志位,
+   *                            对于Map-Only型作业中Map任务和所有类型作业的Reduce任务，都需要恢复，true
+   */
   protected void scheduleTasks(Set<TaskId> taskIDs,
       boolean recoverTaskOutput) {
+
     for (TaskId taskID : taskIDs) {
       TaskInfo taskInfo = completedTasksFromPreviousRun.remove(taskID);
       if (taskInfo != null) {
         eventHandler.handle(new TaskRecoverEvent(taskID, taskInfo,
             committer, recoverTaskOutput));
       } else {
+        /**
+         *  构造 TaskEventType.T_SCHEDULE 类型任务调度事件TaskEvent，交给eventHandler处理
+         */
         eventHandler.handle(new TaskEvent(taskID, TaskEventType.T_SCHEDULE));
       }
     }
+
   }
 
   @Override
@@ -1422,7 +1440,13 @@ public class JobImpl implements org.apache.hadoop.mapreduce.v2.app.job.Job,
       }
       
       try {
+        /**
+         * 完成作业启动前的部分初始化工作
+         * 1. 获取并设置作业远程提交路径remoteJobSubmitDir
+         * 2. 获取并设置作业远程配置文件remoteJobConfFile
+         */
         setup(job);
+
         job.fs = job.getFileSystem(job.conf);
 
         //log to job history
@@ -1440,8 +1464,18 @@ public class JobImpl implements org.apache.hadoop.mapreduce.v2.app.job.Job,
         job.eventHandler.handle(new JobHistoryEvent(job.jobId, jse));
         //TODO JH Verify jobACLs, UserName via UGI?
 
+        /**
+         *  创建分片
+         */
         TaskSplitMetaInfo[] taskSplitMetaInfo = createSplits(job, job.jobId);
+
+        /**
+         * 确定Map Task数目numMapTasks
+         * 分片元数据信息数组的长度，即有多少分片就有多少numMapTasks
+         */
         job.numMapTasks = taskSplitMetaInfo.length;
+
+        // 确定Reduce Task数目numReduceTasks, 去作业参数 mapreduce.job.reduces
         job.numReduceTasks = job.conf.getInt(MRJobConfig.NUM_REDUCES, 0);
 
         if (job.numMapTasks == 0 && job.numReduceTasks == 0) {
@@ -1456,11 +1490,21 @@ public class JobImpl implements org.apache.hadoop.mapreduce.v2.app.job.Job,
 
         checkTaskLimits();
 
+        /**
+         * 根据分片元数据信息计算输入长度inputLength，也就是作业大小
+         */
         long inputLength = 0;
         for (int i = 0; i < job.numMapTasks; ++i) {
           inputLength += taskSplitMetaInfo[i].getInputDataLength();
         }
 
+        /**
+         * 根据作业大小，调用作业的makeUberDecision()方法，决定作业运行模式是Uber模式还是Non-Uber模式
+         *
+         *     1、本地Local模式: 通常用于调试；
+         *     2、Uber模式:  为降低小作业延迟而设计的一种模式，所有任务，不管是Map Task，还是Reduce Task，均在同一个Container中顺序执行，这个Container其实也是MRAppMaster所在Container；
+         *     3、Non-Uber模式: 对于运行时间较长的大作业，先为Map Task申请资源，当Map Task运行完成数目达到一定比例后再为Reduce Task申请资源。
+         */
         job.makeUberDecision(inputLength);
         
         job.taskAttemptCompletionEvents =
@@ -1477,10 +1521,19 @@ public class JobImpl implements org.apache.hadoop.mapreduce.v2.app.job.Job,
             job.conf.getInt(MRJobConfig.REDUCE_FAILURES_MAXPERCENT, 0);
 
         // create the Tasks but don't start them yet
+        /**
+         * 创建Map  Task
+         */
         createMapTasks(job, inputLength, taskSplitMetaInfo);
+
+        /**
+         * 创建Reduce  Task
+         */
         createReduceTasks(job);
 
         job.metrics.endPreparingJob(job);
+
+        // 返回作业内部状态，JobStateInternal.INITED，即已经初始化
         return JobStateInternal.INITED;
       } catch (Exception e) {
         LOG.warn("Job init failed", e);
@@ -1503,6 +1556,10 @@ public class JobImpl implements org.apache.hadoop.mapreduce.v2.app.job.Job,
         LOG.debug("startJobs: parent=" + path + " child=" + oldJobIDString);
       }
 
+      /**
+       * 获取并设置作业远程提交路径remoteJobSubmitDir
+       * 获取并设置作业远程配置文件remoteJobConfFile
+       */
       job.remoteJobSubmitDir =
           FileSystem.get(job.conf).makeQualified(
               new Path(path, oldJobIDString));
@@ -1602,17 +1659,34 @@ public class JobImpl implements org.apache.hadoop.mapreduce.v2.app.job.Job,
 
   private static class SetupCompletedTransition
       implements SingleArcTransition<JobImpl, JobEvent> {
+
     @Override
     public void transition(JobImpl job, JobEvent event) {
+      /**
+       * 会触发作业由 SETUP 状态转换到 RUNNING 状态
+       */
+
+      // 通过设置作业的setupProgress为1，标记作业setup已完成
       job.setupProgress = 1.0f;
+
+
+      /**
+       * ***********************************
+       * 重要：调度作业的Map Task 和 Reduce Task
+       * 通过JobImpl的scheduleTasks()完成的
+       * ***********************************
+       */
       job.scheduleTasks(job.mapTasks, job.numReduceTasks == 0);
       job.scheduleTasks(job.reduceTasks, true);
 
+
       // If we have no tasks, just transition to job completed
       if (job.numReduceTasks == 0 && job.numMapTasks == 0) {
+        // 如果没有task了，则生成JOB_COMPLETED事件并交由作业的事件处理器eventHandler进行处理
         job.eventHandler.handle(new JobEvent(job.jobId,
             JobEventType.JOB_COMPLETED));
       }
+
     }
   }
 
@@ -1638,25 +1712,43 @@ public class JobImpl implements org.apache.hadoop.mapreduce.v2.app.job.Job,
     @Override
     public void transition(JobImpl job, JobEvent event) {
       JobStartEvent jse = (JobStartEvent) event;
+
+      // 设置作业的起始时间startTime
       if (jse.getRecoveredJobStartTime() != 0) {
         job.startTime = jse.getRecoveredJobStartTime();
       } else {
         job.startTime = job.clock.getTime();
       }
+
+      /**
+       *
+       */
       JobInitedEvent jie =
-        new JobInitedEvent(job.oldJobId,
-             job.startTime,
-             job.numMapTasks, job.numReduceTasks,
-             job.getState().toString(),
-             job.isUber());
+              new JobInitedEvent(job.oldJobId,
+                      job.startTime,
+                      job.numMapTasks, job.numReduceTasks,
+                      job.getState().toString(),
+                      job.isUber());
       job.eventHandler.handle(new JobHistoryEvent(job.jobId, jie));
+
+      /**
+       *
+       */
       JobInfoChangeEvent jice = new JobInfoChangeEvent(job.oldJobId,
-          job.appSubmitTime, job.startTime);
+              job.appSubmitTime, job.startTime);
       job.eventHandler.handle(new JobHistoryEvent(job.jobId, jice));
+
       job.metrics.runningJob(job);
 
+
+      /**
+       * 构造提交作业 CommitterEventType.JOB_SETUP ，并交由作业的事件处理器eventHandler处理
+       *
+       * eventHandler 就是 CommitterEventHandler
+       */
       job.eventHandler.handle(new CommitterJobSetupEvent(
               job.jobId, job.jobContext));
+
     }
   }
 

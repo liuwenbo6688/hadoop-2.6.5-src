@@ -79,6 +79,7 @@ public abstract class RMContainerRequestor extends RMCommunicator {
   // numContainers dont end up as duplicates
   private final Set<ResourceRequest> ask = new TreeSet<ResourceRequest>(
       new org.apache.hadoop.yarn.api.records.ResourceRequest.ResourceRequestComparator());
+
   private final Set<ContainerId> release = new TreeSet<ContainerId>();
   // pendingRelease holds history or release requests.request is removed only if
   // RM sends completedContainer.
@@ -182,11 +183,26 @@ public abstract class RMContainerRequestor extends RMCommunicator {
     ResourceBlacklistRequest blacklistRequest =
         ResourceBlacklistRequest.newInstance(new ArrayList<String>(blacklistAdditions),
             new ArrayList<String>(blacklistRemovals));
+
+    /**
+     * 新建资源请求
+     */
     AllocateRequest allocateRequest =
-        AllocateRequest.newInstance(lastResponseID,
-          super.getApplicationProgress(), new ArrayList<ResourceRequest>(ask),
-          new ArrayList<ContainerId>(release), blacklistRequest);
+            AllocateRequest.newInstance(lastResponseID,
+                    super.getApplicationProgress(),
+                    // 请求的资源，ask的数据从哪里赋值的？  RMContainerAllocator.handle -> scheduledRequests.addMap 中被添加
+                    new ArrayList<ResourceRequest>(ask),
+                    new ArrayList<ContainerId>(release),
+                    blacklistRequest);
+
+    /**
+     * *************************************************************************************
+     *  重要,分配资源, 此处的 scheduler 并非是调度器， 而是ApplicationMasterProtocol, 找RM申请资源
+     * *************************************************************************************
+     */
     AllocateResponse allocateResponse = scheduler.allocate(allocateRequest);
+
+
     lastResponseID = allocateResponse.getResponseId();
     availableResources = allocateResponse.getAvailableResources();
     lastClusterNmCount = clusterNmCount;
@@ -396,6 +412,9 @@ public abstract class RMContainerRequestor extends RMCommunicator {
     remoteRequest.setNumContainers(remoteRequest.getNumContainers() + 1);
 
     // Note this down for next interaction with ResourceManager
+    /**
+     *
+     */
     addResourceRequestToAsk(remoteRequest);
     if (LOG.isDebugEnabled()) {
       LOG.debug("addResourceRequest:" + " applicationId="
@@ -464,6 +483,7 @@ public abstract class RMContainerRequestor extends RMCommunicator {
     if(ask.contains(remoteRequest)) {
       ask.remove(remoteRequest);
     }
+    // 添加 ResourceRequest
     ask.add(remoteRequest);    
   }
 

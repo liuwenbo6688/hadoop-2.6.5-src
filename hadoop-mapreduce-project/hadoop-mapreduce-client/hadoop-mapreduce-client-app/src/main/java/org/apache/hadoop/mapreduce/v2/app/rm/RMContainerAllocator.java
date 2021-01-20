@@ -247,7 +247,20 @@ public class RMContainerAllocator extends RMContainerRequestor
   @Override
   protected synchronized void heartbeat() throws Exception {
     scheduleStats.updateAndLogIfChanged("Before Scheduling: ");
+
+    /**
+     *  *****************************************************
+     *  getResources()函数用于向RM发送心跳信息，并处理心跳应答
+     *  周期性询问RM，以获取新分配的资源和各个container运行状况
+     *  ******************************************************
+     */
     List<Container> allocatedContainers = getResources();
+
+    /**
+     * *****************************************************
+     * 将收到的container分配给某个任务
+     * *****************************************************
+     */
     if (allocatedContainers != null && allocatedContainers.size() > 0) {
       scheduledRequests.assign(allocatedContainers);
     }
@@ -333,11 +346,20 @@ public class RMContainerAllocator extends RMContainerRequestor
   @SuppressWarnings({ "unchecked" })
   protected synchronized void handleEvent(ContainerAllocatorEvent event) {
     recalculateReduceSchedule = true;
+
+
+
     if (event.getType() == ContainerAllocator.EventType.CONTAINER_REQ) {
+      /**
+       * CONTAINER_REQ 类型的事件
+       */
+
       ContainerRequestEvent reqEvent = (ContainerRequestEvent) event;
       JobId jobId = getJob().getID();
       Resource supportedMaxContainerCapability = getMaxContainerCapability();
+
       if (reqEvent.getAttemptID().getTaskId().getTaskType().equals(TaskType.MAP)) {
+        // 如果是Map任务
         if (mapResourceRequest.equals(Resources.none())) {
           mapResourceRequest = reqEvent.getCapability();
           eventHandler.handle(new JobHistoryEvent(jobId,
@@ -359,12 +381,20 @@ public class RMContainerAllocator extends RMContainerRequestor
             eventHandler.handle(new JobEvent(jobId, JobEventType.JOB_KILL));
           }
         }
-        // set the resources
+
+        /**
+         *
+         */
+        // set the resources 设置资源  内存 + 虚拟核
         reqEvent.getCapability().setMemory(mapResourceRequest.getMemory());
-        reqEvent.getCapability().setVirtualCores(
-          mapResourceRequest.getVirtualCores());
+        reqEvent.getCapability().setVirtualCores(mapResourceRequest.getVirtualCores());
+
+        // 缓存 container 请求，有心跳线程取出来与RM通信时申请
+        // 追到 heartbeat() 方法
         scheduledRequests.addMap(reqEvent);//maps are immediately scheduled
+
       } else {
+        // Reduce 任务
         if (reduceResourceRequest.equals(Resources.none())) {
           reduceResourceRequest = reqEvent.getCapability();
           eventHandler.handle(new JobHistoryEvent(jobId,
@@ -389,19 +419,23 @@ public class RMContainerAllocator extends RMContainerRequestor
         }
         // set the resources
         reqEvent.getCapability().setMemory(reduceResourceRequest.getMemory());
-        reqEvent.getCapability().setVirtualCores(
-          reduceResourceRequest.getVirtualCores());
+        reqEvent.getCapability().setVirtualCores(reduceResourceRequest.getVirtualCores());
+
         if (reqEvent.getEarlierAttemptFailed()) {
           //add to the front of queue for fail fast
           pendingReduces.addFirst(new ContainerRequest(reqEvent, PRIORITY_REDUCE));
         } else {
+          /**
+           *
+           */
           pendingReduces.add(new ContainerRequest(reqEvent, PRIORITY_REDUCE));
           //reduces are added to pending and are slowly ramped up
         }
       }
       
-    } else if (
-        event.getType() == ContainerAllocator.EventType.CONTAINER_DEALLOCATE) {
+    }
+
+    else if (event.getType() == ContainerAllocator.EventType.CONTAINER_DEALLOCATE) {
   
       LOG.info("Processing the event " + event.toString());
 
@@ -422,8 +456,9 @@ public class RMContainerAllocator extends RMContainerRequestor
         LOG.error("Could not deallocate container for task attemptId " + 
             aId);
       }
-    } else if (
-        event.getType() == ContainerAllocator.EventType.CONTAINER_FAILED) {
+    }
+
+    else if (event.getType() == ContainerAllocator.EventType.CONTAINER_FAILED) {
       ContainerFailedEvent fEv = (ContainerFailedEvent) event;
       String host = getHost(fEv.getContMgrAddress());
       containerFailedOnHost(host);
@@ -686,18 +721,30 @@ public class RMContainerAllocator extends RMContainerRequestor
       rampDown--;
     }
   }
-  
+
+
+  /**
+   * 发远程RM发送心跳信息,注意心跳里可能没有新的资源请求信息
+   * 只是告诉RM自己还活着,或者只是从RM取得分配资源
+   * @return
+   * @throws Exception
+   */
   @SuppressWarnings("unchecked")
   private List<Container> getResources() throws Exception {
     // will be null the first time
     Resource headRoom = Resources.clone(getAvailableResources());
     AllocateResponse response;
+
+
     /*
      * If contact with RM is lost, the AM will wait MR_AM_TO_RM_WAIT_INTERVAL_MS
      * milliseconds before aborting. During this interval, AM will still try
      * to contact the RM.
      */
     try {
+      /**
+       *
+       */
       response = makeRemoteRequest();
       // Reset retry count if no exception occurred.
       retrystartTime = System.currentTimeMillis();
@@ -731,6 +778,8 @@ public class RMContainerAllocator extends RMContainerRequestor
       // continue to attempt to contact the RM.
       throw e;
     }
+
+
     Resource newHeadRoom = getAvailableResources();
     List<Container> newContainers = response.getAllocatedContainers();
     // Setting NMTokens
@@ -880,6 +929,10 @@ public class RMContainerAllocator extends RMContainerRequestor
       new HashMap<String, LinkedList<TaskAttemptId>>();
     private final Map<String, LinkedList<TaskAttemptId>> mapsRackMapping = 
       new HashMap<String, LinkedList<TaskAttemptId>>();
+
+    /**
+     * 需要申请资源的 ContainerRequest 缓存
+     */
     @VisibleForTesting
     final Map<TaskAttemptId, ContainerRequest> maps =
       new LinkedHashMap<TaskAttemptId, ContainerRequest>();
@@ -948,6 +1001,10 @@ public class RMContainerAllocator extends RMContainerRequestor
        request = new ContainerRequest(event, PRIORITY_MAP);
       }
       maps.put(event.getAttemptID(), request);
+
+      /**
+       * 添加 ContainerRequest
+       */
       addContainerReq(request);
     }
     

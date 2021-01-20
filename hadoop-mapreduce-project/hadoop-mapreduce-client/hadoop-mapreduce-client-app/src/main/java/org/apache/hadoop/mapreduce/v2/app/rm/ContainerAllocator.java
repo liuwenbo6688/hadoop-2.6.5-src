@@ -20,6 +20,9 @@ package org.apache.hadoop.mapreduce.v2.app.rm;
 
 import org.apache.hadoop.yarn.event.EventHandler;
 
+/**
+ *  ContainerAllocator负责与ResourceManager通信，为作业申请资源。
+ */
 public interface ContainerAllocator extends EventHandler<ContainerAllocatorEvent>{
 
   enum EventType {

@@ -20,5 +20,5 @@ package org.apache.hadoop.mapreduce.v2.api.records;
 
 public enum Avataar {
   VIRGIN,
-  SPECULATIVE
+  SPECULATIVE // 推测执行原理
 }

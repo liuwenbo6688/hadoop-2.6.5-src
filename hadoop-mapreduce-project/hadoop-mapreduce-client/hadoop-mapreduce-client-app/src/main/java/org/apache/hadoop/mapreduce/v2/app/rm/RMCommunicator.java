@@ -120,7 +120,12 @@ public abstract class RMCommunicator extends AbstractService
     JobId jobId = TypeConverter.toYarn(id);
     job = context.getJob(jobId);
     register();
+
+    /**
+     *
+     */
     startAllocatorThread();
+
     super.serviceStart();
   }
 
@@ -272,6 +277,8 @@ public abstract class RMCommunicator extends AbstractService
   }
 
   protected void startAllocatorThread() {
+
+    // 维护心跳信息
     allocatorThread = new Thread(new Runnable() {
       @Override
       public void run() {
@@ -279,6 +286,9 @@ public abstract class RMCommunicator extends AbstractService
           try {
             Thread.sleep(rmPollInterval);
             try {
+              /**
+               * 心跳
+               */
               heartbeat();
             } catch (YarnRuntimeException e) {
               LOG.error("Error communicating with RM: " + e.getMessage() , e);
@@ -300,6 +310,8 @@ public abstract class RMCommunicator extends AbstractService
         }
       }
     });
+
+
     allocatorThread.setName("RMCommunicator Allocator");
     allocatorThread.start();
   }

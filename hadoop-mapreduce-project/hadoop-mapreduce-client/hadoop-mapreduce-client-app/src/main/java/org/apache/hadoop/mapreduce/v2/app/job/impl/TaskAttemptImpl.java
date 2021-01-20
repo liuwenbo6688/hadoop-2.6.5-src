@@ -155,7 +155,12 @@ public abstract class TaskAttemptImpl implements
   protected final JobConf conf;
   protected final Path jobFile;
   protected final int partition;
+
+  /**
+   *
+   */
   protected EventHandler eventHandler;
+
   private final TaskAttemptId attemptId;
   private final Clock clock;
   private final org.apache.hadoop.mapred.JobID oldJobId;
@@ -1470,9 +1475,14 @@ public abstract class TaskAttemptImpl implements
     @Override
     public void transition(TaskAttemptImpl taskAttempt, 
         TaskAttemptEvent event) {
+
       // Tell any speculator that we're requesting a container
+      /**
+       *
+       */
       taskAttempt.eventHandler.handle
           (new SpeculatorEvent(taskAttempt.getID().getTaskId(), +1));
+
       //request for container
       if (rescheduled) {
         taskAttempt.eventHandler.handle(
@@ -1480,12 +1490,19 @@ public abstract class TaskAttemptImpl implements
                 taskAttempt.attemptId, 
                 taskAttempt.resourceCapability));
       } else {
+        /**
+         * 发送 ContainerAllocator.EventType.CONTAINER_REQ 类型的事件
+         *
+         * 走 RMContainerAllocator.handle 申请container
+         *
+         */
         taskAttempt.eventHandler.handle(new ContainerRequestEvent(
-            taskAttempt.attemptId, taskAttempt.resourceCapability,
-            taskAttempt.dataLocalHosts.toArray(
-                new String[taskAttempt.dataLocalHosts.size()]),
-            taskAttempt.dataLocalRacks.toArray(
-                new String[taskAttempt.dataLocalRacks.size()])));
+                taskAttempt.attemptId,
+                taskAttempt.resourceCapability,
+                taskAttempt.dataLocalHosts.toArray(new String[taskAttempt.dataLocalHosts.size()]),
+                taskAttempt.dataLocalRacks.toArray(new String[taskAttempt.dataLocalRacks.size()]))
+        );
+
       }
     }
   }

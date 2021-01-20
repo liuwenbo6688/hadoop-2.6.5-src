@@ -155,6 +155,7 @@ public abstract class TaskImpl implements Task, EventHandler<TaskEvent> {
     // Transitions from NEW state
     .addTransition(TaskStateInternal.NEW, TaskStateInternal.SCHEDULED, 
         TaskEventType.T_SCHEDULE, new InitialScheduleTransition())
+
     .addTransition(TaskStateInternal.NEW, TaskStateInternal.KILLED, 
         TaskEventType.T_KILL, new KillNewTransition())
     .addTransition(TaskStateInternal.NEW,
@@ -594,24 +595,49 @@ public abstract class TaskImpl implements Task, EventHandler<TaskEvent> {
 
   // This is always called in the Write Lock
   private void addAndScheduleAttempt(Avataar avataar) {
+    /**
+     * 调用addAttempt()方法，创建一个任务运行尝试TaskAttempt实例attempt
+     */
     TaskAttempt attempt = addAttempt(avataar);
+
+    // 放入正在执行的Attempt缓存中
     inProgressAttempts.add(attempt.getID());
+
     //schedule the nextAttemptNumber
     if (failedAttempts.size() > 0) {
       eventHandler.handle(new TaskAttemptEvent(attempt.getID(),
           TaskAttemptEventType.TA_RESCHEDULE));
     } else {
+
+      /**
+       *  TaskAttempt生成了，接下来就应该进行调度执行
+       *  发送 TaskAttemptEventType.TA_SCHEDULE 类型的事件
+       *  状态变化 TaskAttemptStateInternal.NEW -> TaskAttemptStateInternal.UNASSIGNED
+       *  走 RequestContainerTransition 处理
+       */
       eventHandler.handle(new TaskAttemptEvent(attempt.getID(),
           TaskAttemptEventType.TA_SCHEDULE));
+
     }
   }
 
   private TaskAttemptImpl addAttempt(Avataar avataar) {
+
+
+    /**
+     * 创建任务运行尝试
+     * 根据任务是 MapTask还是 ReduceTask，分别执行子类:
+     *  MapTaskImpl.createAttempt
+     *  ReduceTaskImpl.createAttempt
+     */
     TaskAttemptImpl attempt = createAttempt();
+
+    // 设置attempt的Avataar属性
     attempt.setAvataar(avataar);
     if (LOG.isDebugEnabled()) {
       LOG.debug("Created attempt " + attempt.getID());
     }
+
     switch (attempts.size()) {
       case 0:
         attempts = Collections.singletonMap(attempt.getID(),
@@ -884,8 +910,22 @@ public abstract class TaskImpl implements Task, EventHandler<TaskEvent> {
 
     @Override
     public void transition(TaskImpl task, TaskEvent event) {
+      /**
+       * 状态 NEW -> SCHEDULED
+       */
+
+
+      /**
+       * 重要:
+       * 添加并调度任务运行尝试 TaskAttempt
+       */
       task.addAndScheduleAttempt(Avataar.VIRGIN);
+
       task.scheduledTime = task.clock.getTime();
+
+      /**
+       *  发送任务启动事件
+       */
       task.sendTaskStartedEvent();
     }
   }

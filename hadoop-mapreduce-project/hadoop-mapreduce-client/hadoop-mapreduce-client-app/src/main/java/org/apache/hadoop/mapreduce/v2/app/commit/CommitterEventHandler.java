@@ -61,7 +61,13 @@ public class CommitterEventHandler extends AbstractService
       LogFactory.getLog(CommitterEventHandler.class);
 
   private final AppContext context;
+
+  /**
+   *  MRAppMaster#createOutputCommitter() 中初始化
+   *  通用的就是 FileOutputCommitter
+   */
   private final OutputCommitter committer;
+
   private final RMHeartbeatHandler rmHeartbeatHandler;
   private ThreadPoolExecutor launcherPool;
   private Thread eventHandlingThread;
@@ -251,9 +257,17 @@ public class CommitterEventHandler extends AbstractService
     @SuppressWarnings("unchecked")
     protected void handleJobSetup(CommitterJobSetupEvent event) {
       try {
+        /**
+         * 通用的实现类就是 FileOutputCommitter
+         */
         committer.setupJob(event.getJobContext());
+
+        /**
+         *  处理事件 JobEventType.JOB_SETUP_COMPLETED
+         */
         context.getEventHandler().handle(
-            new JobSetupCompletedEvent(event.getJobID()));
+                new JobSetupCompletedEvent(event.getJobID()));
+
       } catch (Exception e) {
         LOG.warn("Job setup failed", e);
         context.getEventHandler().handle(new JobSetupFailedEvent(

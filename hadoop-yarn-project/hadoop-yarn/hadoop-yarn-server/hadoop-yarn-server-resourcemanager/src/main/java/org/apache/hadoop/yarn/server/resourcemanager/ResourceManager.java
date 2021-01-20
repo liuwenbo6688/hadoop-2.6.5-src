@@ -157,6 +157,7 @@ public class ResourceManager extends CompositeService implements Recoverable {
 
   /**
    * 与appMaster通信的组件
+   * 主要是 appMaster 申请和释放资源
    */
   protected ApplicationMasterService masterService;
 
