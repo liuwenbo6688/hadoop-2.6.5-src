@@ -221,7 +221,10 @@ public class FSEditLog implements LogsPurgeable {
 
   private final NNStorage storage;
   private final Configuration conf;
-  
+
+  /**
+   * eidts log 写入的本地磁盘的目录
+   */
   private final List<URI> editsDirs;
 
   private final ThreadLocal<OpInstanceCache> cache =
@@ -234,6 +237,7 @@ public class FSEditLog implements LogsPurgeable {
   
   /**
    * The edit directories that are shared between primary and secondary.
+   * 配置的 journal node 有哪些节点
    */
   private final List<URI> sharedEditsDirs;
 
@@ -319,7 +323,7 @@ public class FSEditLog implements LogsPurgeable {
         DFSConfigKeys.DFS_NAMENODE_EDITS_DIR_MINIMUM_DEFAULT);
 
     /**
-     *
+     * 初始化 JournalSet
      */
     synchronized(journalSetLock) {
       journalSet = new JournalSet(minimumRedundantJournals);
@@ -338,7 +342,7 @@ public class FSEditLog implements LogsPurgeable {
           }
         } else {
           //如果不是本地文件系统的话，就在这里走 createJournal() 方法JournalNode上去的
-          // 会创建出来  QuorumJournalManager ，就是专门负责将 edits log 写入到
+          // 会创建出来  QuorumJournalManager ，就是专门负责将 edits log 写入到 journal node上去
           journalSet.add(createJournal(u), required,
               sharedEditsDirs.contains(u));
         }
@@ -490,7 +494,9 @@ public class FSEditLog implements LogsPurgeable {
       /**
        * transaction 机制相关的代码，开启一个transaction
        * 这里会分配一个全局唯一的 transactionId
-       * txid
+       * txid:  edits 日志文件的格式
+       * edits_${start_txid}-${end_txid} 已经写完的文件
+       * edits_inprogress_${start_txid}  正在写入的文件
        */
       long start = beginTransaction();
       op.setTransactionId(txid);
@@ -512,6 +518,11 @@ public class FSEditLog implements LogsPurgeable {
       
       // check if it is time to schedule an automatic sync
       if (!shouldForceSync()) {
+        /**
+         * ************************************************************
+         * 非常重要的一个分支，没有达到缓冲区的阈值（512KB）,写完就直接返回了
+         * ************************************************************
+         */
         return;
       }
       isAutoSyncScheduled = true;
@@ -898,6 +909,7 @@ public class FSEditLog implements LogsPurgeable {
   
   /** 
    * Add create directory record to edit log
+   * 记录'创建目录'的日志
    */
   public void logMkDir(String path, INode newNode) {
     PermissionStatus permissions = newNode.getPermissionStatus();
@@ -1301,7 +1313,7 @@ public class FSEditLog implements LogsPurgeable {
    * Start writing to the log segment with the given txid.
    * Transitions from BETWEEN_LOG_SEGMENTS state to IN_LOG_SEGMENT state.
    * 开启一个新的日志段（edits log的分段存储机制）
-   *
+   * 在这里初始化 EditLogOutputStream
    *
    */
   synchronized void startLogSegment(final long segmentTxId,
@@ -1326,6 +1338,9 @@ public class FSEditLog implements LogsPurgeable {
     storage.attemptRestoreRemovedStorage();
     
     try {
+      /**
+       * 创建一个新的日志段的输出流（包装流）
+       */
       editLogStream = journalSet.startLogSegment(segmentTxId,
           NameNodeLayoutVersion.CURRENT_LAYOUT_VERSION);
     } catch (IOException ex) {

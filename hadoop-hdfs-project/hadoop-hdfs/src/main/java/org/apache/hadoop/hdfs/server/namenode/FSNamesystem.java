@@ -3335,7 +3335,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
    *
    * hdfs 客户端想要申请一个新的block，这个block是属于一个文件的
    * 这个方法会返回一个block，里面包含了这个block的副本都在哪些机器上面（datanode）
-   * 这个block里面的对个datanode中的第一个，就是hdfs客户端写数据的那个节点
+   * 这个block里面的多个datanode中的第一个，就是hdfs客户端写数据的那个节点
    * 其他的datanode需要跟第一个datanode建立连接，数据管道
    */
   LocatedBlock getAdditionalBlock(String src, long fileId, String clientName,
@@ -4668,7 +4668,10 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       }
 
       // create directories beginning from the first null index
-      // 从上一个循环接着继续
+      /**
+       * 从上一个循环接着继续
+       * i 没有初始化赋值，接着上一个for循环，从第一个为null的开始创建文件目录树
+       */
       for(; i < inodes.length; i++) {
         pathbuilder.append(Path.SEPARATOR).
             append(DFSUtil.bytes2String(components[i]));
@@ -5240,6 +5243,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     try {
       checkOperation(OperationCategory.WRITE);
       checkNameNodeSafeMode("Cannot renew lease for " + holder);
+      /**
+       * 续约
+       */
       leaseManager.renewLease(holder);
     } finally {
       readUnlock();

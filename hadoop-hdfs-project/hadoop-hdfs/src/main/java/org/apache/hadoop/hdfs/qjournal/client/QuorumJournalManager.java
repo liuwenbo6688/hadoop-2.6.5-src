@@ -490,9 +490,17 @@ public class QuorumJournalManager implements JournalManager {
       for (RemoteEditLog remoteLog : manifest.getLogs()) {
         URL url = logger.buildURLToFetchLogs(remoteLog.getStartTxId());
 
+        /**
+         *
+         */
         EditLogInputStream elis = EditLogFileInputStream.fromUrl(
-            connectionFactory, url, remoteLog.getStartTxId(),
-            remoteLog.getEndTxId(), remoteLog.isInProgress());
+                connectionFactory,
+                url,
+                remoteLog.getStartTxId(),
+                remoteLog.getEndTxId(),
+                remoteLog.isInProgress());
+
+
         allStreams.add(elis);
       }
     }

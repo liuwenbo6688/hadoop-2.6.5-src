@@ -47,8 +47,12 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
 
   // edits_inprogress 文件
   private File file;
-  //存储本地 edit logs 的文件流
+
+  /**
+   * 存储本地 edit logs 的文件输出流
+   */
   private FileOutputStream fp; // file stream for storing edit logs
+
   private FileChannel fc; // channel of the file stream for sync
   private EditsDoubleBuffer doubleBuf;
   static final ByteBuffer fill = ByteBuffer.allocateDirect(MIN_PREALLOCATION_LENGTH);

@@ -457,7 +457,9 @@ public class LeaseManager {
           try {
 
             /**
-             * 检查契约的逻辑
+             * ************************************************
+             *   检查契约的逻辑
+             * ************************************************
              */
             if (!fsnamesystem.isInSafeMode()) {
               needSync = checkLeases();

@@ -650,7 +650,6 @@ class BlockReceiver implements Closeable {
       if (checksumReceivedLen > 0 && shouldVerifyChecksum()) {
         /**
          * checksum校验传输正确性
-         *
          * Crc32
          */
         try {
@@ -755,8 +754,7 @@ class BlockReceiver implements Closeable {
           long begin = Time.monotonicNow();
 
           /**
-           *
-           *
+           * 写到本地磁盘blk文件
            */
           out.write(dataBuf.array(), startByteToDisk, numBytesToDisk);
 
@@ -977,8 +975,10 @@ class BlockReceiver implements Closeable {
 
 
       /**
+       * ***********************************************
        * 核心逻辑
        * 不停的接收packet，直到接收成功
+       * ***********************************************
        */
       while (receivePacket() >= 0) {
         /* Receive until the last packet */
@@ -1200,9 +1200,11 @@ class BlockReceiver implements Closeable {
    * and sends back replies to the originator.
    * 处理管道流中下游datanode的响应信息
    */
-  class PacketResponder implements Runnable, Closeable {   
+  class PacketResponder implements Runnable, Closeable {
+
     /** queue for packets waiting for ack - synchronization using monitor lock */
-    private final LinkedList<Packet> ackQueue = new LinkedList<Packet>(); 
+    private final LinkedList<Packet> ackQueue = new LinkedList<Packet>();
+
     /** the thread that spawns this responder */
     private final Thread receiverThread = Thread.currentThread();
     /** is this responder running? - synchronization using monitor lock */
@@ -1379,6 +1381,7 @@ class BlockReceiver implements Closeable {
                */
               // read an ack from downstream datanode
               ack.readFields(downstreamIn);
+
               ackRecvNanoTime = System.nanoTime();
               if (LOG.isDebugEnabled()) {
                 LOG.debug(myString + " got " + ack);

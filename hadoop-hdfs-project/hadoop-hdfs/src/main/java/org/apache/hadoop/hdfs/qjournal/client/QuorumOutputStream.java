@@ -124,6 +124,7 @@ class QuorumOutputStream extends EditLogOutputStream {
       /**
        * 通过 AsyncLoggerSet 组件到大多数的 journal node上去
        * AsyncLoggerSet loggers  是从QuorumJournalManager中传递过来的
+       * **** 异步发送 ****
        */
       QuorumCall<AsyncLogger, Void> qcall = loggers.sendEdits(
           segmentTxId, firstTxToFlush,

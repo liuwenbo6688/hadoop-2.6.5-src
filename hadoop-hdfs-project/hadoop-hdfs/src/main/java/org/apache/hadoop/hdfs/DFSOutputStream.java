@@ -741,12 +741,20 @@ public class DFSOutputStream extends FSOutputSummer
 
 
             /**
-             *  nextBlockOutputStream() 方法其实就是负责跟namenode去申请一个新的block、建立好数据流的管道
-             *
+             *  nextBlockOutputStream() 方法其实就是
+             *  1. 负责跟NameNode去申请一个新的block
+             *  2. 和DataNode建立好数据流的管道
              */
-            setPipeline( nextBlockOutputStream() );
+            setPipeline(
+                    /** */
+                    nextBlockOutputStream()
+            );
 
-            // 把状态设置为 DATA_STREAMING，正在流式写入数据的阶段
+
+            /**
+             * 把状态设置为 DATA_STREAMING，正在流式写入数据的阶段
+             * 初始化 ResponseProcessor ，负责处理响应结果
+             */
             initDataStreaming();
 
           } else if (stage == BlockConstructionStage.PIPELINE_SETUP_APPEND) {
@@ -820,14 +828,17 @@ public class DFSOutputStream extends FSOutputSummer
           }
 
 
-          /**
-           * 向远程的 datanode 写数据
-           */
           // write out data to remote datanode
           try {
-            // 直接将packet的数据刷到 datanode 上去
+            /**
+             * ***************************************
+             * 向远程的 datanode 写数据
+             * 直接将packet的数据刷到 datanode 上去
+             * ***************************************
+             */
             one.writeTo(blockStream);
-            blockStream.flush();   
+            blockStream.flush();
+
           } catch (IOException e) {
             // HDFS-3398 treat primary DN is down since client is unable to 
             // write to primary DN. If a failed or restarting node has already
@@ -835,7 +846,7 @@ public class DFSOutputStream extends FSOutputSummer
             // effect. Pipeline recovery can handle only one node error at a
             // time. If the primary node fails again during the recovery, it
             // will be taken out then.
-            tryMarkPrimaryDatanodeFailed();
+            tryMarkPrimaryDatanodeFailed();//写数据时的异常处理机制
             throw e;
           }
 
@@ -1544,7 +1555,7 @@ public class DFSOutputStream extends FSOutputSummer
      *
      * 这个操作一般会发生在一个文件被创建和一个新的block被分配的时候
      *
-     * 会给你返回 blockid 和 副本分布在哪些节点上（datanode）
+     * 会给你返回 blockId 和 副本分布在哪些节点上（datanode）
      *
      */
     private LocatedBlock nextBlockOutputStream() throws IOException {
@@ -1586,11 +1597,10 @@ public class DFSOutputStream extends FSOutputSummer
         nodes = lb.getLocations();
         storageTypes = lb.getStorageTypes();
 
-        //
-        // Connect to first DataNode in the list.
-        //
+
 
         /**
+         *  Connect to first DataNode in the list.
          *  直接对block的datanodes列表中的第一个节点建立连接，创建输出流
          */
         success = createBlockOutputStream(nodes, storageTypes, 0L, false);
@@ -1598,6 +1608,7 @@ public class DFSOutputStream extends FSOutputSummer
 
         if (!success) {
           // 如果连接失败的情况下
+
           /**
            * 故障处理机制
            * 如果这里尝试连接到这个block的第一个datanode失败了，
@@ -1609,6 +1620,7 @@ public class DFSOutputStream extends FSOutputSummer
           DFSClient.LOG.info("Abandoning " + block);
           dfsClient.namenode.abandonBlock(block, fileId, src,
               dfsClient.clientName);
+
           block = null;
           DFSClient.LOG.info("Excluding datanode " + nodes[errorIndex]);
           // 放到 excludedNodes 列表中去
@@ -2050,7 +2062,7 @@ public class DFSOutputStream extends FSOutputSummer
             dfsClient.getConf().writePacketSize, // 每个packet数据包的大小，默认是 64 KB
             bytesPerChecksum);
 
-    Span traceSpan = null;
+    Span traceSpan = null;DFSOutputStream
     if (Trace.isTracing()) {
       traceSpan = Trace.startSpan(this.getClass().getSimpleName()).detach();
     }

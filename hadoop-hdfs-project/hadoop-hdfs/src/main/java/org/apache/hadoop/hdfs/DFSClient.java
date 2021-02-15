@@ -1690,9 +1690,17 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
      * 比较核心的方法在这
      * 这里面的逻辑非常复杂了
      */
-    final DFSOutputStream result = DFSOutputStream.newStreamForCreate(this,
-            src, masked, flag, createParent, replication, blockSize, progress,
-            buffersize, dfsClientConf.createChecksum(checksumOpt),
+    final DFSOutputStream result = DFSOutputStream.newStreamForCreate(
+            this,
+            src,
+            masked,
+            flag,
+            createParent,
+            replication,
+            blockSize,
+            progress,
+            buffersize,
+            dfsClientConf.createChecksum(checksumOpt),
             favoredNodeStrs);
 
     /**
